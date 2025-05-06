@@ -1,0 +1,10 @@
+[package]
+name = "event_ray"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8.1"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = "0.1.17"
+async-stream = "0.3.6"

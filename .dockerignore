@@ -1,0 +1,12 @@
+# Ignore build artifacts
+target/
+
+# Ignore Git directory
+.git/
+
+# Ignore IDE/editor specific files
+.vscode/
+.idea/
+
+# Ignore memory bank directory (unless needed at runtime)
+memory-bank/
