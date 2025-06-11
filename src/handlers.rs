@@ -26,6 +26,7 @@ pub async fn publish_event_handler(
     State(state): State<AppState>,
     Json(publish_request): Json<PublishRequest>,
 ) -> StatusCode {
+    println!("publisher handler invoked");
     let event = AppEvent {
         id: Uuid::new_v4(),
         ray_id: publish_request.ray_id,
@@ -35,7 +36,9 @@ pub async fn publish_event_handler(
 
     match state.event_sender.send(event) {
         Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Err(e) => {
+            println!("APP event error {e}");
+            StatusCode::OK},
     }
 }
 
@@ -56,12 +59,11 @@ pub async fn sse_handler(
     State(state): State<AppState>,
     Query(params): Query<SseParams>,
 ) -> impl IntoResponse {
-    println!("handler invoked");
+    println!("sse handler invoked");
     let mut rx = state.event_sender.subscribe();
 
     let stream = stream! {
         while let Ok(event) = rx.recv().await {
-    println!("app event: {:?}", event);
             if event.ray_id == params.ray {
                 yield Result::<Event, Infallible>::Ok(
                     Event::default().data(event.payload)

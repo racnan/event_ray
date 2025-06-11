@@ -1,8 +1,8 @@
-mod api_models;
-mod app_state;
-mod event;
-mod handlers;
-mod routes;
+pub mod api_models;
+pub mod app_state;
+pub mod event;
+pub mod handlers;
+pub mod routes;
 
 use app_state::AppState;
 use event::AppEvent;
@@ -15,7 +15,7 @@ use tokio::sync::broadcast;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize broadcast channel
-    let (event_sender, _rx) = broadcast::channel::<AppEvent>(100);
+    let (event_sender, _) = broadcast::channel::<AppEvent>(100);
 
     // Construct AppState
     let app_state = AppState { event_sender };
