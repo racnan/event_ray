@@ -1,15 +1,22 @@
+use async_stream::stream;
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    response::{
+        sse::{Event, Sse},
+        Json,
+    },
+};
+use chrono::Utc;
+use std::convert::Infallible;
+use uuid::Uuid;
+
 use crate::{
     api_models::{PublishRequest, SseParams},
     app_state::AppState,
     event::AppEvent,
 };
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::Json,
-};
-use chrono::Utc;
-use uuid::Uuid;
 
 /// Handles health check requests.
 /// Returns a static string "Event Ray is Up" to indicate the server is running.
@@ -38,16 +45,10 @@ pub async fn publish_event_handler(
         Ok(_) => StatusCode::OK,
         Err(e) => {
             println!("APP event error {e}");
-            StatusCode::OK},
+            StatusCode::OK
+        }
     }
 }
-
-use async_stream::stream;
-use axum::{
-    response::sse::{Event, Sse},
-    response::IntoResponse,
-};
-use std::convert::Infallible;
 
 /// Handles Server-Sent Events (SSE) requests.
 /// Takes the application state and SSE parameters (`SseParams`) from the query string.

@@ -16,24 +16,25 @@ impl PublisherTestClient {
             base_url,
         }
     }
-    
+
     /// Publish an event to a specific ray
     pub async fn publish_event(&self, ray_id: &str, payload: String) -> Result<(), reqwest::Error> {
         let publish_url = format!("{}/api/events", self.base_url);
-        
+
         let request_body = PublishRequest {
             ray_id: ray_id.to_string(),
             payload,
         };
-        
-        let response = self.http_client
+
+        let response = self
+            .http_client
             .post(&publish_url)
             .json(&request_body)
             .send()
             .await?;
-        
+
         response.error_for_status()?;
-        
+
         Ok(())
     }
 }

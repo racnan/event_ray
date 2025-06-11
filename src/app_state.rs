@@ -1,6 +1,6 @@
-use crate::event::AppEvent;
 use tokio::sync::broadcast;
 
+use crate::event::AppEvent;
 /// Represents the shared application state.
 /// This struct is used to share resources, like the event broadcast sender,
 /// across different parts of the application (e.g., Axum handlers).

@@ -1,13 +1,7 @@
-pub mod api_models;
-pub mod app_state;
-pub mod event;
-pub mod handlers;
-pub mod routes;
-
-use app_state::AppState;
-use event::AppEvent;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
+
+use event_ray::{app_state::AppState, event::AppEvent, routes};
 
 /// The main entry point for the Event Ray application.
 /// Initializes the Tokio runtime, sets up the event broadcast channel,

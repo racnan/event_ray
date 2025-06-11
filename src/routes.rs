@@ -1,6 +1,9 @@
-use crate::app_state::AppState;
-use crate::handlers;
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
+
+use crate::{app_state::AppState, handlers};
 
 /// Creates the main application router.
 /// Takes an `AppState` instance which is shared across handlers

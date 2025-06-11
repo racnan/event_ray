@@ -1,13 +1,13 @@
-mod common;
-
-use event_ray::app_state::AppState;
-use event_ray::event::AppEvent;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use uuid::Uuid;
+
+use event_ray::{app_state::AppState, event::AppEvent};
+
+mod common;
+use common::publisher_client::PublisherTestClient;
 use common::server_manager::TestServerHandle;
 use common::sse_client::SseTestClient;
-use common::publisher_client::PublisherTestClient;
 
 #[cfg(test)]
 mod tests {
@@ -16,7 +16,9 @@ mod tests {
     async fn setup_test_environment() -> (TestServerHandle, PublisherTestClient, String) {
         let (event_sender, _) = broadcast::channel::<AppEvent>(1024);
         let app_state = AppState { event_sender };
-        let server = TestServerHandle::new(app_state).await.expect("Failed to start server");
+        let server = TestServerHandle::new(app_state)
+            .await
+            .expect("Failed to start server");
         let base_url = server.base_url.clone();
         let publisher_client = PublisherTestClient::new(base_url.clone());
         (server, publisher_client, base_url)
@@ -35,7 +37,8 @@ mod tests {
 
         // Now publish the event
         println!("Publishing event to ray: {}", ray_id);
-        publisher.publish_event(&ray_id, payload_str.clone())
+        publisher
+            .publish_event(&ray_id, payload_str.clone())
             .await
             .inspect_err(|e| println!("{e}"))
             .expect("Failed to publish event");
