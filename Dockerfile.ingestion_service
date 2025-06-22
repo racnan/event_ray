@@ -1,0 +1,20 @@
+# Use the official Rust image as the base image.
+FROM rust
+
+# Set the working directory inside the container.
+WORKDIR /usr/src/event_ray
+
+# Copy the entire project directory into the container's working directory.
+# This includes all workspace members.
+COPY . .
+
+# Compile the ingestion_service application in release mode.
+RUN cargo build --release -p ingestion_service
+
+# Inform Docker that the container listens on port 8082 at runtime.
+# This should match the port the ingestion_service is configured to use.
+EXPOSE 8082
+
+# Define the default command to run when the container starts.
+# This executes the compiled ingestion_service binary.
+CMD ["./target/release/ingestion_service"]

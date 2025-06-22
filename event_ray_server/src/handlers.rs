@@ -12,10 +12,10 @@ use chrono::Utc;
 use std::convert::Infallible;
 use uuid::Uuid;
 
-use crate::{
+use crate::app_state::AppState;
+use event_ray_core::{
     api_models::{PublishRequest, SseParams},
-    app_state::AppState,
-    event::AppEvent,
+    app_event::AppEvent,
 };
 
 /// Handles health check requests.

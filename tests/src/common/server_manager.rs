@@ -1,7 +1,7 @@
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
-use event_ray::app_state::AppState;
+use event_ray_server::app_state::AppState;
 
 /// Handle for managing a test instance of the Event Ray server
 pub struct TestServerHandle {
@@ -25,7 +25,7 @@ impl TestServerHandle {
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
         // Get the router from the application
-        let router = event_ray::routes::create_router(app_state);
+        let router = event_ray_server::routes::create_router(app_state);
 
         // Spawn the server task
         tokio::spawn(async move {
@@ -34,7 +34,7 @@ impl TestServerHandle {
                     shutdown_rx.await.ok();
                 })
                 .await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                .map_err(std::io::Error::other)
         });
 
         // Wait for server to be ready by checking health endpoint

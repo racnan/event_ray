@@ -10,11 +10,11 @@ COPY . .
 
 # Compile the application in release mode.
 # This creates an optimized executable binary.
-RUN cargo build --release
+RUN cargo build --release -p event_ray_server
 
 # Inform Docker that the container listens on port 8081 at runtime.
 EXPOSE 8081
 
 # Define the default command to run when the container starts.
 # This executes the compiled binary located in the target/release directory.
-CMD ["./target/release/event_ray"]
+CMD ["./target/release/event_ray_server"]

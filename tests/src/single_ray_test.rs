@@ -2,12 +2,12 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use event_ray::{app_state::AppState, event::AppEvent};
+use event_ray_server::app_state::AppState;
+use event_ray_core::app_event::AppEvent;
 
-mod common;
-use common::publisher_client::PublisherTestClient;
-use common::server_manager::TestServerHandle;
-use common::sse_client::SseTestClient;
+use crate::common::{
+    publisher_client::PublisherTestClient, server_manager::TestServerHandle, sse_client::SseTestClient,
+};
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,8 @@
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use event_ray::{app_state::AppState, event::AppEvent, routes};
+use event_ray_server::{app_state::AppState, routes};
+use event_ray_core::app_event::AppEvent;
 
 /// The main entry point for the Event Ray application.
 /// Initializes the Tokio runtime, sets up the event broadcast channel,

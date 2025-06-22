@@ -1,4 +1,4 @@
-use event_ray::api_models::PublishRequest;
+use event_ray_core::api_models::PublishRequest;
 
 /// Publisher test client for sending events to the Event Ray server
 pub struct PublisherTestClient {

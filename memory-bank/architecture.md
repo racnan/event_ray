@@ -29,44 +29,5 @@
     *   If the identifiers match, the handler formats the event's content appropriately for SSE and streams it to its connected client.
     *   If the identifiers do not match, the handler discards the event for that particular client.
 
-## Visual Representation of Event Flow:
-
-```mermaid
-graph TD
-    subgraph Event Publishing
-        Client_Publisher[External Client/Service]
-        API_Publish_Endpoint[/api/events]
-        Event_Publish_Handler[Event Publishing Logic]
-
-        Client_Publisher -- HTTP POST (ray_id, payload) --> API_Publish_Endpoint
-        API_Publish_Endpoint --> Event_Publish_Handler
-        Event_Publish_Handler -- Internal Event Data --> Central_Event_Bus{Central Event Bus (Tokio Broadcast Channel)}
-    end
-
-    subgraph Event Subscription & Delivery
-        Client_Subscriber_1[SSE Client 1]
-        Client_Subscriber_2[SSE Client 2]
-        API_SSE_Endpoint[/sse]
-        SSE_Handler_1[SSE Handling Logic (for Client 1, filters for ray_A)]
-        SSE_Handler_2[SSE Handling Logic (for Client 2, filters for ray_B)]
-
-        Client_Subscriber_1 -- HTTP GET /sse?ray=ray_A --> API_SSE_Endpoint
-        Client_Subscriber_2 -- HTTP GET /sse?ray=ray_B --> API_SSE_Endpoint
-
-        API_SSE_Endpoint --> SSE_Handler_1
-        API_SSE_Endpoint --> SSE_Handler_2
-
-        Central_Event_Bus -- Internal Event (ray_A) --> SSE_Handler_1
-        Central_Event_Bus -- Internal Event (ray_B) --> SSE_Handler_2
-        Central_Event_Bus -- Internal Event (ray_C) --> SSE_Handler_1
-        Central_Event_Bus -- Internal Event (ray_C) --> SSE_Handler_2
-
-        SSE_Handler_1 -- SSE Message (payload for ray_A) --> Client_Subscriber_1
-        SSE_Handler_2 -- SSE Message (payload for ray_B) --> Client_Subscriber_2
-        SSE_Handler_1 -- Filters out event (ray_C) -.-> X1[Not Sent to Client 1]
-        SSE_Handler_2 -- Filters out event (ray_C) -.-> X2[Not Sent to Client 2]
-    end
-```
-
 ---
 This flow ensures that events are efficiently broadcast and selectively delivered to clients based on their specific subscriptions, forming the core of Event Ray's real-time capabilities.
