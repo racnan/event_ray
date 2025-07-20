@@ -1,7 +1,11 @@
-use axum::{extract::Json, http::StatusCode};
+use crate::app_state::AppState;
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+};
+use chrono::Utc;
 use event_ray_core::{api_models::PublishRequest, app_event::AppEvent};
 use uuid::Uuid;
-use chrono::Utc;
 
 /// Handles health check requests.
 /// Returns a static string "OK" to indicate the service is running.
@@ -10,11 +14,11 @@ pub async fn health_check() -> &'static str {
 }
 
 /// Handles incoming event ingestion requests.
-/// It takes a JSON payload (`PublishRequest`).
-/// Creates an `AppEvent` with a new UUID and current timestamp.
-/// For this version, it logs the successfully created `AppEvent`.
-/// Returns `StatusCode::ACCEPTED` on success.
+/// It takes a JSON payload (`PublishRequest`), creates an `AppEvent`,
+/// and uses the `EventPublisher` from the shared state to forward it.
+/// Returns `StatusCode::ACCEPTED` on success or `StatusCode::INTERNAL_SERVER_ERROR` on failure.
 pub async fn ingest_event_handler(
+    State(state): State<AppState>,
     Json(publish_request): Json<PublishRequest>,
 ) -> Result<StatusCode, StatusCode> {
     // Construct an AppEvent
@@ -25,8 +29,13 @@ pub async fn ingest_event_handler(
         payload: publish_request.payload,
     };
 
-    // For this version, log the successfully created AppEvent
-    println!("Ingestion service received event: {:?}", event);
+    // Publish the event
+    if let Err(e) = state.publisher.publish(&event).await {
+        eprintln!("Failed to publish event: {:?}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    println!("Ingestion service successfully published event: {:?}", event);
 
     // Return 202 Accepted
     Ok(StatusCode::ACCEPTED)

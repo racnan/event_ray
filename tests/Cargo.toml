@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 event_ray_server = { path = "../event_ray_server" }
 event_ray_core = { path = "../event_ray_core" }
+ingestion_service = { path = "../ingestion_service" }
 axum = "0.8.1"
 
 # Test utilities

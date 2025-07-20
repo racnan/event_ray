@@ -4,6 +4,36 @@
 
 ---
 
+## Task: Abstract Event Publishing with an HTTP-Based Implementation
+
+**Summary:** Introduced a generic `EventPublisher` trait in the `ingestion_service` to abstract the event propagation mechanism. An initial `HttpPublisher` implementation was created, which forwards events to the `event_ray_server` via an HTTP POST request. The `ingestion_service` was updated to use this new trait-based publisher, and the integration tests were refactored to launch both services and validate the end-to-end event flow.
+
+**Key Changes and Outcomes:**
+
+*   **`EventPublisher` Trait Created:**
+    *   Defined an `EventPublisher` trait in `ingestion_service/src/publisher.rs` to abstract event publishing.
+    *   Added `async-trait` dependency.
+*   **`HttpPublisher` Implementation:**
+    *   Created `ingestion_service/src/publisher/http.rs` with an `HttpPublisher` struct.
+    *   This implementation uses `reqwest` to POST events to a configurable target URL.
+*   **`ingestion_service` Integration:**
+    *   Introduced `ingestion_service/src/app_state.rs` to manage a shared `Arc<dyn EventPublisher>`.
+    *   Updated `ingestion_service/src/main.rs` to initialize the `HttpPublisher` and `AppState`.
+    *   The `ingest_event_handler` now uses the publisher from the shared state.
+*   **Hybrid Crate Conversion:**
+    *   Converted `ingestion_service` from a binary-only crate to a hybrid library/binary crate by adding `src/lib.rs` to allow the `tests` crate to use its components as a dependency.
+*   **Integration Test Refactoring:**
+    *   Updated `tests/src/common/server_manager.rs` with a `ServerConfig` enum to manage the startup of both `event_ray_server` and `ingestion_service`.
+    *   Modified `tests/src/single_ray_test.rs` to launch both services and confirm that an event sent to the `ingestion_service` is successfully received by a client connected to the `event_ray_server`.
+*   **Code Quality Ensured:**
+    *   Project compiles without warnings (`cargo check --workspace`).
+    *   No `cargo clippy --workspace -- -D warnings` issues.
+    *   All automated tests pass (`cargo test --workspace`).
+
+**Impact:** Decoupled the event ingestion logic from the transport mechanism, making it easier to add new backplanes (like Kafka or Redis) in the future without altering the core ingestion handler. The default HTTP implementation provides a simple, working communication layer for single-node or basic multi-service deployments.
+
+---
+
 ## Task: Create Independent Ingestion Service and Refactor to Cargo Workspace
 
 **Summary:** Restructured the Event Ray project into a Cargo workspace. Created a new, independent 'Ingestion Service' binary (`ingestion_service`) with its own API endpoint (`POST /api/events`) for receiving events and a health check (`GET /health`). Shared data structures (`AppEvent`, `PublishRequest`, `SseParams`) were moved into a new shared library crate (`event_ray_core`). The existing `event_ray_server` binary retains its functionality. Dockerfiles were created for both services. Integration tests were moved to a dedicated `tests` crate at the workspace level.
