@@ -4,6 +4,32 @@
 
 ---
 
+## Task: Create Project README.md
+
+**Summary:** Created a comprehensive `README.md` file for the Event Ray project. The README provides a project overview, links to detailed documentation, and includes clear instructions for setup, execution, and testing.
+
+**Key Changes and Outcomes:**
+
+*   **`README.md` Created:**
+    *   A new `README.md` file was added to the project root.
+*   **Content Added:**
+    *   **Project Overview:** A brief introduction to Event Ray.
+    *   **Project Details:** Links to `projectbrief.md`, `architecture.md`, and `project_structure.md`.
+    *   **Getting Started:** Prerequisites for building and running the project.
+    *   **How to Run:** Step-by-step instructions for building the workspace, running both services, and using `curl` to subscribe to and publish events.
+    *   **Testing:** Instructions on how to run the integration tests.
+    *   **Work in Progress:** A note about the project's active development status.
+*   **Port Correction:**
+    *   Ensured the correct ports (`8081` for `event_ray_server` and `8082` for `ingestion_service`) were used in the instructions.
+*   **Code Quality Ensured:**
+    *   Project compiles without warnings (`cargo check --workspace`).
+    *   No `cargo clippy --workspace -- -D warnings` issues.
+    *   All automated tests pass (`cargo test --workspace`).
+
+**Impact:** The new `README.md` significantly improves the project's accessibility for new users and developers by providing a clear entry point and essential information for getting started.
+
+---
+
 ## Task: Abstract Event Publishing with an HTTP-Based Implementation
 
 **Summary:** Introduced a generic `EventPublisher` trait in the `ingestion_service` to abstract the event propagation mechanism. An initial `HttpPublisher` implementation was created, which forwards events to the `event_ray_server` via an HTTP POST request. The `ingestion_service` was updated to use this new trait-based publisher, and the integration tests were refactored to launch both services and validate the end-to-end event flow.
