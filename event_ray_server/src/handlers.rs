@@ -2,20 +2,23 @@ use async_stream::stream;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
-    response::IntoResponse,
     response::{
         sse::{Event, Sse},
-        Json,
+        IntoResponse, Json,
     },
 };
 use chrono::Utc;
+use error_stack::Report;
 use std::convert::Infallible;
+use tokio::sync::broadcast::error::RecvError;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
+use crate::error::Error;
 use event_ray_core::{
     api_models::{PublishRequest, SseParams},
     app_event::AppEvent,
+    error::{ApiError, ApiErrorResponse},
 };
 
 /// Handles health check requests.
@@ -28,11 +31,11 @@ pub async fn health_check() -> &'static str {
 /// It takes the application state and a JSON payload (`PublishRequest`).
 /// Creates an `AppEvent` with a new UUID and current timestamp,
 /// then sends it through the broadcast channel in the `AppState`.
-/// Returns `StatusCode::OK` on success, or `StatusCode::INTERNAL_SERVER_ERROR` on failure.
+/// Returns `StatusCode::OK` on success, or a `Report<ApiError>` wrapped in `ApiErrorResponse` on failure.
 pub async fn publish_event_handler(
     State(state): State<AppState>,
     Json(publish_request): Json<PublishRequest>,
-) -> StatusCode {
+) -> Result<impl IntoResponse, ApiErrorResponse> {
     println!("publisher handler invoked");
     let event = AppEvent {
         id: Uuid::new_v4(),
@@ -42,10 +45,11 @@ pub async fn publish_event_handler(
     };
 
     match state.event_sender.send(event) {
-        Ok(_) => StatusCode::OK,
+        Ok(_) => Ok(StatusCode::OK),
         Err(e) => {
-            println!("APP event error {e}");
-            StatusCode::OK
+            let report = Report::new(Error::from(e))
+                .change_context(ApiError::InternalServerError);
+            Err(report.into())
         }
     }
 }
@@ -64,11 +68,26 @@ pub async fn sse_handler(
     let mut rx = state.event_sender.subscribe();
 
     let stream = stream! {
-        while let Ok(event) = rx.recv().await {
-            if event.ray_id == params.ray {
-                yield Result::<Event, Infallible>::Ok(
-                    Event::default().data(event.payload)
-                );
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    if event.ray_id == params.ray {
+                        yield Result::<Event, Infallible>::Ok(
+                            Event::default().data(event.payload)
+                        );
+                    }
+                }
+                Err(e) => match e {
+                    RecvError::Lagged(missed_count) => {
+                        println!("SSE stream lagged, missed {} messages", missed_count);
+                        continue;
+                    }
+                    RecvError::Closed => {
+                        let report = Report::new(Error::from(RecvError::Closed));
+                        println!("FATAL: SSE stream sender has been dropped, closing connection. This indicates a critical server error. Report: {report:?}");
+                        break;
+                    }
+                },
             }
         }
     };

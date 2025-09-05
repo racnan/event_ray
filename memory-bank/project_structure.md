@@ -35,6 +35,8 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
     *   Declares public modules of the `event_ray_server` library, making them accessible for `main.rs` and integration tests.
 *   **`app_state.rs`:**
     *   Defines the `AppState` struct, encapsulating shared application state (like the event broadcast sender using `AppEvent` from `event_ray_core`) for the SSE server.
+*   **`error.rs`:**
+    *   Defines the service-specific `Error` enum for `event_ray_server`, wrapping errors that can occur within its handlers (e.g., broadcast channel failures).
 *   **`handlers.rs`:**
     *   Contains Axum request handler functions for the SSE server's API endpoints (e.g., event publishing, SSE connections, health check).
 *   **`routes.rs`:**
@@ -45,6 +47,8 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 *   **`main.rs`:**
     *   The main entry point for the Ingestion Service.
     *   Initializes runtime, configures routes, and starts its HTTP server.
+*   **`error.rs`:**
+    *   Defines the service-specific `Error` enum for `ingestion_service`, providing generic contexts for failures (e.g., `PublishFailed`).
 *   **`handlers.rs`:**
     *   Contains Axum request handler functions for the Ingestion Service's API endpoints (e.g., event ingestion at `/api/events`, health check at `/health`).
 *   **`routes.rs`:**
@@ -54,6 +58,9 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 
 *   **`lib.rs`:**
     *   The main library file, declaring and exporting shared modules.
+*   **`error.rs`:**
+    *   Defines the workspace-wide `ApiError` enum, which provides high-level error contexts (`BadRequest`, `InternalServerError`) for creating consistent HTTP responses.
+    *   Contains the `ApiErrorResponse` newtype wrapper for converting `error-stack::Report<ApiError>` into an `axum::response::IntoResponse`.
 *   **`app_event.rs`:**
     *   Defines the primary internal event structure (`AppEvent`) used across the workspace.
 *   **`api_models.rs`:**
@@ -66,7 +73,7 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 *   **`single_ray_test.rs`:**
     *   Contains integration tests, primarily for the `event_ray_server`.
 *   **`common/` (directory with `mod.rs`):**
-    *   Contains shared utilities for testing (e.g., `TestServerHandle`, `SseTestClient`, `PublisherTestClient`).
+    *   Contains shared utilities for testing, including a `TestUtilError` enum for unified error handling (`error.rs`), and clients for the server (`TestServerHandle`, `SseTestClient`, `PublisherTestClient`).
 
 ## Key Data Structures:
 
@@ -79,5 +86,8 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 
 *   **`AppState` (in `event_ray_server/src/app_state.rs`):**
     *   **Purpose:** To provide shared resources for the `event_ray_server`, like the Tokio broadcast sender for `AppEvent`s.
+
+*   **`ApiError`, `ApiErrorResponse` (in `event_ray_core/src/error.rs`):**
+    *   **Purpose:** `ApiError` provides high-level classification of errors for HTTP responses. `ApiErrorResponse` wraps an `error-stack::Report` to provide a consistent, centralized `IntoResponse` implementation for all services.
 
 This workspace structure with distinct crates aims for better separation of concerns, improved build times for individual components, and clearer organization as the project grows.

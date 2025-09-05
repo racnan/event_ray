@@ -3,6 +3,7 @@ use crate::common::{
     server_manager::{ServerConfig, TestServerHandle},
     sse_client::SseTestClient,
 };
+use reqwest::StatusCode;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -61,6 +62,31 @@ mod tests {
             Ok(None) => panic!("Stream ended prematurely, expected an event"),
             Err(e) => panic!("Failed to receive event: {:?}", e),
         }
+
+        // Stop both servers.
+        ingestion_server
+            .stop()
+            .await
+            .expect("Failed to stop Ingestion server");
+        event_ray_server
+            .stop()
+            .await
+            .expect("Failed to stop Event Ray server");
+    }
+
+    #[tokio::test]
+    async fn test_publish_invalid_schema_returns_400() {
+        let (ingestion_server, event_ray_server, publisher) = setup_test_environment().await;
+
+        // This JSON is malformed (missing a closing brace)
+        let malformed_body = r#"{"ray_id": "some-ray", "payload": "some_payload""#.to_string();
+
+        let response = publisher
+            .publish_raw_body(malformed_body)
+            .await
+            .expect("Request failed");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         // Stop both servers.
         ingestion_server

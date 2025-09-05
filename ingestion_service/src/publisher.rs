@@ -1,10 +1,11 @@
 pub mod http;
 
+use crate::error::Error;
 use async_trait::async_trait;
+use error_stack::Report;
 use event_ray_core::app_event::AppEvent;
-use std::error::Error;
 
 #[async_trait]
 pub trait EventPublisher: Send + Sync {
-    async fn publish(&self, event: &AppEvent) -> Result<(), Box<dyn Error>>;
+    async fn publish(&self, event: &AppEvent) -> Result<(), Report<Error>>;
 }

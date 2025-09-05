@@ -1,3 +1,4 @@
+use crate::common::error::TestUtilError;
 use futures::stream::StreamExt;
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ pub struct SseTestClient {
 
 impl SseTestClient {
     /// Connect to an SSE endpoint for a specific ray
-    pub async fn connect(base_url: &str, ray_id: &str) -> Result<Self, eventsource_client::Error> {
+    pub async fn connect(base_url: &str, ray_id: &str) -> Result<Self, TestUtilError> {
         let sse_url = format!("{}/sse?ray={}", base_url, ray_id);
 
         // Create the client
@@ -31,7 +32,7 @@ impl SseTestClient {
     pub async fn receive_event(
         &mut self,
         timeout: Duration,
-    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<String>, TestUtilError> {
         loop {
             match tokio::time::timeout(timeout, self.stream.next()).await {
                 Ok(Some(Ok(sse_event))) => {
@@ -46,7 +47,7 @@ impl SseTestClient {
                         }
                     }
                 }
-                Ok(Some(Err(e))) => return Err(Box::new(e)),
+                Ok(Some(Err(e))) => return Err(e.into()),
                 Ok(None) => return Ok(None), // Stream ended
                 Err(_) => return Ok(None),   // Timeout
             }

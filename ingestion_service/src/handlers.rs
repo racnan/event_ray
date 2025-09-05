@@ -2,9 +2,15 @@ use crate::app_state::AppState;
 use axum::{
     extract::{Json, State},
     http::StatusCode,
+    response::IntoResponse,
 };
 use chrono::Utc;
-use event_ray_core::{api_models::PublishRequest, app_event::AppEvent};
+use error_stack::ResultExt;
+use event_ray_core::{
+    api_models::PublishRequest,
+    app_event::AppEvent,
+    error::{ApiError, ApiErrorResponse},
+};
 use uuid::Uuid;
 
 /// Handles health check requests.
@@ -16,11 +22,11 @@ pub async fn health_check() -> &'static str {
 /// Handles incoming event ingestion requests.
 /// It takes a JSON payload (`PublishRequest`), creates an `AppEvent`,
 /// and uses the `EventPublisher` from the shared state to forward it.
-/// Returns `StatusCode::ACCEPTED` on success or `StatusCode::INTERNAL_SERVER_ERROR` on failure.
+/// Returns `StatusCode::ACCEPTED` on success or `ApiErrorResponse` on failure.
 pub async fn ingest_event_handler(
     State(state): State<AppState>,
     Json(publish_request): Json<PublishRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<impl IntoResponse, ApiErrorResponse> {
     // Construct an AppEvent
     let event = AppEvent {
         id: Uuid::new_v4(),
@@ -30,10 +36,11 @@ pub async fn ingest_event_handler(
     };
 
     // Publish the event
-    if let Err(e) = state.publisher.publish(&event).await {
-        eprintln!("Failed to publish event: {:?}", e);
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+    state
+        .publisher
+        .publish(&event)
+        .await
+        .change_context(ApiError::InternalServerError)?;
 
     println!("Ingestion service successfully published event: {:?}", event);
 

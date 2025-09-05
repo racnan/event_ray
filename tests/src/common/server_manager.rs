@@ -1,3 +1,4 @@
+use crate::common::error::TestUtilError;
 use event_ray_server::app_state::AppState as EventRayAppState;
 use ingestion_service::{
     app_state::AppState as IngestionAppState, publisher::http::HttpPublisher,
@@ -24,7 +25,7 @@ pub struct TestServerHandle {
 
 impl TestServerHandle {
     /// Create and start a new test server instance based on the provided configuration.
-    pub async fn new(config: ServerConfig) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(config: ServerConfig) -> Result<Self, TestUtilError> {
         // Bind to a random available port.
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
@@ -83,7 +84,7 @@ impl TestServerHandle {
     }
 
     /// Stop the test server.
-    pub async fn stop(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn stop(self) -> Result<(), TestUtilError> {
         // Send shutdown signal
         let _ = self.shutdown_tx.send(());
 

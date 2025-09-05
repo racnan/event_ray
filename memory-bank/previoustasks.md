@@ -4,6 +4,40 @@
 
 ---
 
+## Task: Overhaul Error Handling with `error-stack`
+
+**Summary:** Implemented a new, robust error handling system across the workspace using the `error-stack` and `thiserror` libraries. A central `ApiError` enum in `event_ray_core` now defines high-level error categories for consistent HTTP responses. Each service (`event_ray_server`, `ingestion_service`) has its own specific error enum for detailed, service-level error context. The full error chain is preserved in `error-stack::Report` for rich, traceable logging, while ensuring a clean separation of concerns between high-level API errors and low-level implementation details.
+
+**Key Changes and Outcomes:**
+
+*   **`event_ray_core` Error Handling:**
+    *   Added `error-stack`, `thiserror`, and `axum` dependencies.
+    *   Created `event_ray_core/src/error.rs` with a central `ApiError` enum (`BadRequest`, `InternalServerError`).
+    *   Implemented `IntoResponse` for a newtype wrapper (`ApiErrorResponse`) around `Report<ApiError>` to provide centralized, consistent HTTP error responses and work around Rust's orphan rule.
+    *   The `ApiErrorResponse` now logs the full error report to the console before returning a response.
+*   **`event_ray_server` Refactoring:**
+    *   Added `error-stack` and `thiserror` dependencies.
+    *   Created `event_ray_server/src/error.rs` with a service-specific `Error` enum for broadcast channel failures.
+    *   Refactored `publish_event_handler` to return `Result<..., ApiErrorResponse>`, creating and propagating detailed error reports on failure.
+    *   Refactored `sse_handler` to correctly handle `Lagged` and `Closed` broadcast receiver errors without terminating the stream unnecessarily.
+*   **`ingestion_service` Refactoring:**
+    *   Added `error-stack` and `thiserror` dependencies.
+    *   Created `ingestion_service/src/error.rs` with a generic `Error::PublishFailed` enum, decoupling it from `reqwest`.
+    *   Refactored the `EventPublisher` trait and `HttpPublisher` implementation to return `Result<_, Report<Error>>`, preserving the underlying `reqwest::Error` within the report while exposing only the generic context.
+    *   Refactored `ingest_event_handler` to use the new error-handling publisher and map errors to `ApiErrorResponse`.
+*   **Test Suite Refactoring:**
+    *   Created a new `TestUtilError` enum in `tests/src/common/error.rs` using `thiserror` to unify test utility error handling.
+    *   Refactored `server_manager.rs`, `sse_client.rs`, and `publisher_client.rs` to use `TestUtilError`.
+    *   Added a new integration test, `test_publish_invalid_schema_returns_400`, to verify that malformed JSON requests are correctly handled with a `400 Bad Request` status.
+*   **Code Quality Ensured:**
+    *   Project compiles without warnings (`cargo check --workspace`).
+    *   No `cargo clippy --workspace -- -D warnings` issues.
+    *   All automated tests pass (`cargo test --workspace`).
+
+**Impact:** The project now has a scalable, consistent, and robust error handling system. It provides rich, structured error reports for effective debugging while maintaining a clean separation of concerns between different application layers and their error types. This greatly improves the maintainability and reliability of the codebase.
+
+---
+
 ## Task: Create Project README.md
 
 **Summary:** Created a comprehensive `README.md` file for the Event Ray project. The README provides a project overview, links to detailed documentation, and includes clear instructions for setup, execution, and testing.
