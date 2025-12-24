@@ -1,65 +1,252 @@
-**Objective:** Overhaul the project's error handling by implementing a layered and scalable system using the `error-stack` and `thiserror` libraries.
+# Current Task: Implement Scalable Event Propagation with Redis Pub/Sub
 
-The foundation of this system will be established in the `event_ray_core` crate. We will introduce a new `ApiError` type that will serve as a high-level `error-stack::Context`, responsible for categorizing errors (e.g., `BadRequest`, `InternalServerError`) to ensure consistent HTTP responses across all services.
+## Objective
 
-Each service will then define its own specific error contexts, using `thiserror` for clear definitions. These specific errors will be attached to an `error_stack::Report`, preserving the full, typed error chain for rich, traceable logging and debugging, before being categorized by the central `ApiError` at the application boundary.
+Implement a scalable event propagation mechanism using Redis Pub/Sub to decouple the `ingestion_service` from the `event_ray_server`. This will allow multiple instances of each service to communicate effectively. The entire implementation will be controlled by a `redis-pubsub` feature flag.
 
----
-**Implementation Plan**
+## Implementation Steps
 
-**Step 1: Set up `event_ray_core` dependencies.**
-*   Run the following shell commands from the workspace root to add the latest versions of the required dependencies to the `event_ray_core` crate:
-    *   `cargo add thiserror --package event_ray_core`
-    *   `cargo add error-stack --package event_ray_core`
-    *   `cargo add axum --package event_ray_core --no-default-features --features "json"`
+### Step 1: Add Dependencies
 
-**Step 2: Define the core `ApiError` context.**
-*   Create a new file at `event_ray_core/src/error.rs`.
-*   Inside this file, define a public `ApiError` enum with `BadRequest` and `InternalServerError` variants.
-*   Use `thiserror` (`#[derive(Error)]` and `#[error("...")]`) to automatically implement the `Display` trait for `ApiError`.
-*   Implement the `error_stack::Context` marker trait for `ApiError`.
-*   In `event_ray_core/src/lib.rs`, add `pub mod error;` to make the new module public.
+**Objective:** Add the `redis` crate as an optional dependency to the relevant services, controlled by a `redis-pubsub` feature flag. This will be done using the `cargo add` command to ensure the latest versions are used. Note: `serde_json` is already a regular dependency in both services, so it does not need to be added.
 
-**Step 3: Implement Axum integration for `ApiError`.**
-*   In `event_ray_core/src/error.rs`, implement the `axum::response::IntoResponse` trait for `error_stack::Report<ApiError>`. This implementation will contain the logic to convert an error report into a final HTTP `StatusCode` and response body.
-*   In the same file, implement the `From<axum::extract::rejection::JsonRejection>` trait for `error_stack::Report<ApiError>`. This will be the bridge that automatically converts Axum's JSON parsing errors into our `ApiError::BadRequest`.
+**Execution Plan:**
 
-**Step 4: Set up `event_ray_server` error enum.**
-*   Run `cargo add error-stack --package event_ray_server` and `cargo add thiserror --package event_ray_server` to add the dependencies.
-*   Create a new file at `event_ray_server/src/error.rs`.
-*   Inside this file, define a single, public `Error` enum for the service. This enum will have variants to wrap **recoverable, request-time failures**, including:
-    *   `BroadcastSend(#[from] tokio::sync::broadcast::error::SendError<AppEvent>)`
-    *   `BroadcastRecv(#[from] tokio::sync::broadcast::error::RecvError)`
-*   Implement the `Display` (via `thiserror`) and `error_stack::Context` traits for this `Error` enum.
-*   In `event_ray_server/src/lib.rs`, add `pub mod error;` to make the new module public.
+1.  **Update `ingestion_service/Cargo.toml`**:
+    *   Run the following command to add `redis` as an optional dependency with the `tokio-comp` feature:
+        ```sh
+        cargo add redis --optional --features tokio-comp -p ingestion_service
+        ```
+    *   Manually add the `[features]` section to define the `redis-pubsub` feature, which will enable the `redis` dependency:
+        ```toml
+        [features]
+        redis-pubsub = ["dep:redis"]
+        ```
 
-**Step 5: Refactor `event_ray_server` handlers and enable error reporting.**
-*   In `event_ray_server/src/handlers.rs`, refactor the `publish_event_handler` function:
-    *   Change its return type to `Result<impl IntoResponse, error_stack::Report<event_ray_core::error::ApiError>>`.
-    *   Replace the existing error handling for the `state.tx.send()` call. When an error occurs, create an error report with the `event_ray_server::error::Error::BroadcastSend` context, and then attach the high-level `event_ray_core::error::ApiError::InternalServerError` context before returning.
-*   In the `sse_handler` function, refactor the error handling inside the `loop`:
-    *   In the `Err` case of the `rx.recv()` match, create a report using the `event_ray_server::error::Error::BroadcastRecv` context and **print the full error report to the console.**
-*   In `event_ray_core/src/error.rs`, update the `IntoResponse` implementation for `Report<ApiError>` to **print the full error report to the console** before returning the final HTTP response.
+2.  **Update `event_ray_server/Cargo.toml`**:
+    *   Run the following command to add `redis` as an optional dependency with the `tokio-comp` feature:
+        ```sh
+        cargo add redis --optional --features tokio-comp -p event_ray_server
+        ```
+    *   Manually add the `[features]` section to define the `redis-pubsub` feature, which will enable the `redis` dependency:
+        ```toml
+        [features]
+        redis-pubsub = ["dep:redis"]
+        ```
 
-**Step 6: Set up `ingestion_service` error enum.**
-*   Run `cargo add error-stack --package ingestion_service` and `cargo add thiserror --package ingestion_service` to add the dependencies.
-*   Create a new file at `ingestion_service/src/error.rs`.
-*   Inside this file, define a single, public `Error` enum for the service. The primary variant will be to wrap errors from the `reqwest` HTTP client used by the publisher: `PublisherRequest(#[from] reqwest::Error)`.
-*   Implement the `Display` (via `thiserror`) and `error_stack::Context` traits for this `Error` enum.
-*   In `ingestion_service/src/lib.rs`, add `pub mod error;` to make the new module public.
+### Step 2: Create `RedisPublisher`
 
-**Step 7: Refactor `ingestion_service` logic.**
-*   In `ingestion_service/src/publisher.rs`, update the `EventPublisher` trait's `publish` method to return a `Result` that contains a `Report` of the new `ingestion_service::error::Error` on failure.
-*   In `ingestion_service/src/publisher/http.rs`, update the `HttpPublisher::publish` implementation to match the new trait signature. It should create and return a `Report` on failure, using the new `Error` context variants.
-*   In `ingestion_service/src/handlers.rs`, refactor the `ingest_event_handler` to return `Result<impl IntoResponse, error_stack::Report<event_ray_core::error::ApiError>>`. It should now use the `?` operator on the `publish_event` call and attach the appropriate `ApiError` context on failure.
+**Objective:** Create a new publisher in `ingestion_service` that implements the `EventPublisher` trait and sends events to a Redis channel.
 
-**Step 8: Refactor test utilities and update existing test.**
-*   In the `tests/src/common/` module, create a new error module to define a `TestUtilError` enum using `thiserror`. It should have variants for I/O, `reqwest`, and `eventsource_client` errors.
-*   Update the function signatures in `server_manager.rs` and `sse_client.rs` to return this new `TestUtilError` instead of `Result<..., Box<dyn Error>>`.
-*   In `single_ray_test.rs`, update the `test_publish_and_receive_single_event_on_ray` test case.
-*   Modify the `.expect()` calls to properly handle the new `TestUtilError` returned by the refactored test utility functions, ensuring the test continues to pass.
+**Execution Plan:**
 
-**Step 9: Add integration test for `400 Bad Request`.**
-*   In `single_ray_test.rs`, create a new test case.
-*   This test will call the `ingestion_service`'s `/api/events` endpoint with a deliberately malformed JSON body.
-*   The test will assert that the HTTP response has a `400 Bad Request` status code.
+1.  **Create New File:** Create `ingestion_service/src/publisher/redis.rs`.
+2.  **Conditional Compilation:** Guard the entire module with `#[cfg(feature = "redis-pubsub")]` to ensure it is only compiled when the feature is enabled.
+3.  **Define `RedisPublisher` Struct:** The struct will hold a `redis::Client` for connecting to Redis and a `String` for the channel name.
+4.  **Implement `new` Function:** The constructor will take a Redis URL, initialize the `redis::Client`, and return a `RedisPublisher` instance.
+5.  **Implement `EventPublisher` Trait:** Implement the `async fn publish(&self, event: &AppEvent)` method. This method will:
+    a.  Get a connection from the Redis client.
+    b.  Serialize the `AppEvent` to a JSON string using `serde_json`.
+    c.  Use the Redis `PUBLISH` command to send the JSON string to the configured channel.
+    d.  Handle and report any errors using `error-stack`.
+6.  **Expose Module:** Add `#[cfg(feature = "redis-pubsub")] pub mod redis;` to `ingestion_service/src/publisher.rs` to make the new module available.
+
+### Step 3: Create Redis Subscriber
+
+**Objective:** Create a background task in `event_ray_server` that subscribes to a Redis channel and forwards received events to the internal Tokio broadcast channel.
+
+**Execution Plan:**
+
+1.  **Update Error Types:** Add Redis-related error variants to `event_ray_server/src/error.rs`, guarded by `#[cfg(feature = "redis-pubsub")]`:
+    *   `RedisConnection` - for connection/subscription failures (wraps `redis::RedisError`)
+    *   `Deserialization` - for JSON parsing failures (wraps `serde_json::Error`)
+
+2.  **Create New File:** Create `event_ray_server/src/redis_subscriber.rs`.
+
+3.  **Conditional Compilation:** Guard the entire module with `#[cfg(feature = "redis-pubsub")]`.
+
+4.  **Implement Subscriber Function:** Create an async function `run_redis_subscriber` with the following signature:
+    ```rust
+    pub async fn run_redis_subscriber(
+        redis_url: &str,
+        channel: &str,
+        event_sender: broadcast::Sender<AppEvent>,
+    ) -> Result<(), Report<Error>>
+    ```
+    The function will:
+    a.  Connect to Redis using `redis::Client`.
+    b.  Get a Pub/Sub connection and subscribe to the specified channel.
+    c.  Loop to receive messages from the Redis subscription.
+    d.  Deserialize each message from JSON into `AppEvent`.
+    e.  Send the `AppEvent` to the broadcast channel.
+
+5.  **Error Handling Strategy:**
+    *   **Connection errors:** Return `Err` and exit the function (fatal).
+    *   **Deserialization errors:** Log the error with `eprintln!` and continue listening (non-fatal).
+    *   **Broadcast send errors:** Log the error and continue (non-fatal, indicates no subscribers).
+
+6.  **Expose Module:** Add `#[cfg(feature = "redis-pubsub")] pub mod redis_subscriber;` to `event_ray_server/src/lib.rs`.
+
+### Step 4: Update `ingestion_service` Initialization
+
+**Objective:** Conditionally initialize `RedisPublisher` or `HttpPublisher` in `ingestion_service/src/main.rs` based on the `redis-pubsub` feature flag.
+
+**Execution Plan:**
+
+1.  **Add Conditional Imports:** Update imports in `main.rs` to be feature-gated:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    use ingestion_service::publisher::redis::RedisPublisher;
+
+    #[cfg(not(feature = "redis-pubsub"))]
+    use ingestion_service::publisher::http::HttpPublisher;
+    ```
+
+2.  **Conditional Publisher Creation:** Replace the current publisher initialization with feature-gated code:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    let publisher: Arc<dyn EventPublisher> = Arc::new(RedisPublisher::new(
+        "redis://127.0.0.1:6379".to_string(),
+        "event_ray:events".to_string(),
+    ));
+
+    #[cfg(not(feature = "redis-pubsub"))]
+    let publisher: Arc<dyn EventPublisher> = Arc::new(HttpPublisher::new(
+        "http://localhost:8081/api/events".to_string(),
+    ));
+    ```
+
+3.  **Add Startup Log:** Print which publisher mode is active for visibility:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    println!("Using Redis publisher (channel: event_ray:events)");
+
+    #[cfg(not(feature = "redis-pubsub"))]
+    println!("Using HTTP publisher");
+    ```
+
+4.  **Add Required Import:** Add `use crate::publisher::EventPublisher;` to bring the trait into scope for the `Arc<dyn EventPublisher>` type annotation.
+
+### Step 5: Update `event_ray_server` Initialization
+
+**Objective:** Conditionally spawn the Redis subscriber task in `event_ray_server/src/main.rs` when the `redis-pubsub` feature is enabled. The server should verify Redis connectivity before starting.
+
+**Execution Plan:**
+
+1.  **Add Conditional Import:**
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    use event_ray_server::redis_subscriber;
+    ```
+
+2.  **Verify Redis Connection Before Starting:** Before spawning the subscriber, test the Redis connection. If it fails, the server should exit with an error rather than starting in a broken state:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    {
+        // Verify Redis connectivity before starting
+        let client = redis::Client::open("redis://127.0.0.1:6379")?;
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        redis::cmd("PING").query_async::<String>(&mut conn).await?;
+        println!("Connected to Redis successfully");
+    }
+    ```
+
+3.  **Spawn Redis Subscriber:** After verifying connectivity, spawn the subscriber task:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    {
+        let sender_clone = event_sender.clone();
+        tokio::spawn(async move {
+            if let Err(e) = redis_subscriber::run_redis_subscriber(
+                "redis://127.0.0.1:6379",
+                "event_ray:events",
+                sender_clone,
+            ).await {
+                eprintln!("Redis subscriber error: {:?}", e);
+            }
+        });
+        println!("Redis subscriber started (channel: event_ray:events)");
+    }
+    ```
+
+4.  **Add Startup Log for Non-Redis Mode:**
+    ```rust
+    #[cfg(not(feature = "redis-pubsub"))]
+    println!("Running in HTTP mode (no Redis subscriber)");
+    ```
+
+5.  **Add Conditional Redis Import:** Add feature-gated import for the `redis` crate:
+    ```rust
+    #[cfg(feature = "redis-pubsub")]
+    use redis::AsyncCommands;
+    ```
+
+### Step 6: Add Justfile
+
+**Objective:** Add a `justfile` to the project root for convenient development commands, including running both services together and checking all feature combinations.
+
+**Execution Plan:**
+
+1.  **Create `justfile`** in the project root with the following content:
+
+    ```just
+    # Default recipe - show available commands
+    default:
+        @just --list
+
+    # Run both services in HTTP mode (default)
+    run-http:
+        #!/usr/bin/env bash
+        set -e
+        echo "Starting services in HTTP mode..."
+        cargo run -p event_ray_server &
+        SERVER_PID=$!
+        cargo run -p ingestion_service &
+        INGESTION_PID=$!
+        trap "kill $SERVER_PID $INGESTION_PID 2>/dev/null" EXIT
+        wait
+
+    # Run both services with Redis Pub/Sub
+    run-redis:
+        #!/usr/bin/env bash
+        set -e
+        echo "Starting services with Redis Pub/Sub..."
+        echo "Make sure Redis is running on localhost:6379"
+        cargo run -p event_ray_server --features redis-pubsub &
+        SERVER_PID=$!
+        cargo run -p ingestion_service --features redis-pubsub &
+        INGESTION_PID=$!
+        trap "kill $SERVER_PID $INGESTION_PID 2>/dev/null" EXIT
+        wait
+
+    # Run tests
+    test:
+        cargo test --workspace
+
+    # Run clippy for all feature combinations
+    lint:
+        cargo hack --feature-powerset clippy --workspace -- -D warnings
+
+    # Check compilation for all feature combinations
+    check:
+        cargo hack --feature-powerset check --workspace
+    ```
+
+2.  **Prerequisites:** Developers will need to install `just` and `cargo-hack`:
+    ```sh
+    cargo install just
+    cargo install cargo-hack
+    ```
+
+### Step 7: Update Documentation
+
+**Objective:** Update project documentation to reflect the new Redis Pub/Sub feature.
+
+**Execution Plan:**
+
+1.  **Review and update the following documents as needed:**
+    *   `README.md` - Document the Redis feature, justfile commands, and prerequisites
+    *   `memory-bank/architecture.md` - Update event flow to reflect the Redis Pub/Sub path
+    *   `memory-bank/project_structure.md` - Document new files and feature flags
+
+2.  **Add entry to `memory-bank/previoustasks.md`** summarizing the completed task (per SOP).

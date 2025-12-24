@@ -4,6 +4,54 @@
 
 ---
 
+## Task: Implement Scalable Event Propagation with Redis Pub/Sub
+
+**Summary:** Implemented an optional Redis Pub/Sub communication mode for Event Ray to enable horizontal scaling of both `ingestion_service` and `event_ray_server`. The entire implementation is controlled by a `redis-pubsub` feature flag, allowing the system to operate in either HTTP mode (default) or Redis Pub/Sub mode at compile time.
+
+**Key Changes and Outcomes:**
+
+*   **Feature Flag Architecture:**
+    *   Added `redis-pubsub` feature flag to both `event_ray_server` and `ingestion_service` Cargo.toml files
+    *   Added `redis` crate (v1.0.1) as an optional dependency with `tokio-comp` feature enabled
+    *   All Redis-related code is conditionally compiled based on the feature flag
+
+*   **`ingestion_service` Redis Publisher:**
+    *   Created `ingestion_service/src/publisher/redis.rs` implementing `RedisPublisher` struct
+    *   Implements the existing `EventPublisher` trait for consistency with `HttpPublisher`
+    *   Serializes `AppEvent` to JSON and publishes to Redis channel `event_ray:events`
+    *   Uses `error-stack` for robust error handling and context propagation
+    *   Updated `main.rs` to conditionally initialize `RedisPublisher` or `HttpPublisher` based on feature flag
+
+*   **`event_ray_server` Redis Subscriber:**
+    *   Created `event_ray_server/src/redis_subscriber.rs` with `run_redis_subscriber` function
+    *   Subscribes to Redis channel and deserializes JSON messages into `AppEvent` instances
+    *   Forwards received events to the internal Tokio broadcast channel
+    *   Implements error handling strategy: fatal errors (connection failures) terminate the subscriber, non-fatal errors (deserialization failures) are logged but allow continued operation
+    *   Added feature-gated error variants to `event_ray_server/src/error.rs`: `RedisConnection`, `Deserialization`, `RedisStreamEnded`
+    *   Updated `main.rs` to verify Redis connectivity on startup and spawn subscriber task in background
+
+*   **Development Tools:**
+    *   Created `justfile` in project root with commands for running services in different modes:
+        *   `run-http`: Run both services in HTTP mode
+        *   `run-redis`: Run both services in Redis Pub/Sub mode
+        *   `test`: Run workspace tests
+        *   `check`: Check compilation for all feature combinations using `cargo-hack`
+        *   `lint`: Run clippy for all feature combinations using `cargo-hack`
+
+*   **Documentation Updates:**
+    *   Updated `memory-bank/architecture.md` to document both HTTP and Redis Pub/Sub communication modes
+    *   Updated `memory-bank/project_structure.md` to document new files, modules, and feature flags
+    *   Added sections for Feature Flags and Development Tools to project structure documentation
+
+*   **Code Quality Ensured:**
+    *   Project compiles without warnings in both feature configurations (`cargo check --workspace` and with `--features redis-pubsub`)
+    *   No `cargo clippy` warnings in either configuration
+    *   All existing automated tests pass (`cargo test --workspace`)
+
+**Impact:** Event Ray now supports horizontal scaling through Redis Pub/Sub while maintaining backward compatibility with the simpler HTTP-based communication mode. The feature flag approach allows users to choose the deployment model that best fits their needs without code changes. The Redis mode enables multiple instances of both services to operate independently, communicating through a shared Redis instance for improved scalability and fault tolerance.
+
+---
+
 ## Task: Overhaul Error Handling with `error-stack`
 
 **Summary:** Implemented a new, robust error handling system across the workspace using the `error-stack` and `thiserror` libraries. A central `ApiError` enum in `event_ray_core` now defines high-level error categories for consistent HTTP responses. Each service (`event_ray_server`, `ingestion_service`) has its own specific error enum for detailed, service-level error context. The full error chain is preserved in `error-stack::Report` for rich, traceable logging, while ensuring a clean separation of concerns between high-level API errors and low-level implementation details.

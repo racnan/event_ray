@@ -18,6 +18,9 @@ To build and run the project, you will need to have the following installed:
 
 *   [Rust](https://www.rust-lang.org/tools/install)
 *   [Cargo](https://doc.rust-lang.org/cargo/) (comes with Rust)
+*   [Just](https://github.com/casey/just) (optional, for convenient development commands)
+*   [cargo-hack](https://github.com/taiki-e/cargo-hack) (optional, for testing all feature combinations)
+*   [Redis](https://redis.io/docs/getting-started/installation/) (required only for Redis Pub/Sub mode)
 
 ## How to Run
 

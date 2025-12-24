@@ -1,4 +1,6 @@
 pub mod http;
+#[cfg(feature = "redis-pubsub")]
+pub mod redis;
 
 use crate::error::Error;
 use async_trait::async_trait;

@@ -15,8 +15,14 @@
     *   HTTP endpoints for publishing events and subscribing to SSE streams are set up.
 
 2.  **Event Publishing:**
-    *   An external client or internal process sends a request (typically `POST`) to a designated API endpoint to publish a new event. This request includes data for the event, notably an identifier for the target "ray" (event stream) and the event's content (payload).
-    *   The server's request handler for this endpoint processes the incoming data, prepares it as an internal event, and sends this internal event into the central event bus.
+
+    Event Ray supports two modes for publishing events to the central event bus:
+
+    *   **HTTP Mode (default):** An external client sends a request (`POST`) to the `ingestion_service` at `/api/events`. The ingestion service forwards the event to the `event_ray_server` via an HTTP POST request to `/api/events`. The server's request handler processes the incoming data, prepares it as an internal event, and sends this internal event into the central event bus.
+
+    *   **Redis Pub/Sub Mode (with `redis-pubsub` feature flag):** An external client sends a request (`POST`) to the `ingestion_service` at `/api/events`. The ingestion service serializes the event to JSON and publishes it to a Redis channel (`event_ray:events`). The `event_ray_server` runs a background Redis subscriber task that listens on this channel, deserializes received events, and sends them into the central event bus.
+
+    Both modes ultimately result in events being broadcast on the central event bus. The Redis Pub/Sub mode enables horizontal scaling of both services.
 
 3.  **Event Subscription (SSE):**
     *   Clients initiate an SSE connection by sending a request (typically `GET`) to a designated SSE endpoint. This request includes a parameter specifying the "ray" they wish to subscribe to.

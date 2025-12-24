@@ -24,6 +24,19 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
     *   Contains integration tests for the workspace, primarily focusing on `event_ray_server` functionality.
     *   Located in the root `tests/` directory.
 
+## Feature Flags:
+
+Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` feature flag:
+
+*   **`redis-pubsub`:** Enables Redis Pub/Sub communication mode for scalable event propagation. When enabled:
+    *   `ingestion_service` uses `RedisPublisher` to publish events to a Redis channel
+    *   `event_ray_server` spawns a background subscriber task to receive events from Redis
+    *   When disabled (default), services communicate via direct HTTP requests
+
+## Development Tools:
+
+*   **`justfile`:** Located in the project root, provides convenient commands for running services in different modes, testing, and linting across all feature combinations.
+
 ## Crate-Specific Module Overview:
 
 ### 1. `event_ray_server` Crate (`event_ray_server/src/`)
@@ -31,28 +44,41 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 *   **`main.rs`:**
     *   The application's main entry point for the SSE server.
     *   Initializes runtime, shared state (like `AppState`), configures routes, and starts the HTTP server.
+    *   When the `redis-pubsub` feature is enabled, verifies Redis connectivity and spawns the Redis subscriber task.
 *   **`lib.rs`:**
     *   Declares public modules of the `event_ray_server` library, making them accessible for `main.rs` and integration tests.
 *   **`app_state.rs`:**
     *   Defines the `AppState` struct, encapsulating shared application state (like the event broadcast sender using `AppEvent` from `event_ray_core`) for the SSE server.
 *   **`error.rs`:**
     *   Defines the service-specific `Error` enum for `event_ray_server`, wrapping errors that can occur within its handlers (e.g., broadcast channel failures).
+    *   Contains feature-gated error variants for Redis operations (`RedisConnection`, `Deserialization`, `RedisStreamEnded`).
 *   **`handlers.rs`:**
     *   Contains Axum request handler functions for the SSE server's API endpoints (e.g., event publishing, SSE connections, health check).
 *   **`routes.rs`:**
     *   Defines HTTP routes for the SSE server and maps them to handlers in `handlers.rs`.
+*   **`redis_subscriber.rs` (feature-gated with `redis-pubsub`):**
+    *   Contains the `run_redis_subscriber` function that subscribes to a Redis Pub/Sub channel and forwards received events to the internal broadcast channel.
 
 ### 2. `ingestion_service` Crate (`ingestion_service/src/`)
 
 *   **`main.rs`:**
     *   The main entry point for the Ingestion Service.
     *   Initializes runtime, configures routes, and starts its HTTP server.
+    *   Conditionally initializes either `HttpPublisher` (default) or `RedisPublisher` (with `redis-pubsub` feature) based on feature flags.
+*   **`app_state.rs`:**
+    *   Manages shared application state, including a trait object for the event publisher.
 *   **`error.rs`:**
     *   Defines the service-specific `Error` enum for `ingestion_service`, providing generic contexts for failures (e.g., `PublishFailed`).
 *   **`handlers.rs`:**
     *   Contains Axum request handler functions for the Ingestion Service's API endpoints (e.g., event ingestion at `/api/events`, health check at `/health`).
 *   **`routes.rs`:**
     *   Defines HTTP routes for the Ingestion Service and maps them to its handlers.
+*   **`publisher.rs`:**
+    *   Defines the `EventPublisher` trait for abstracting event propagation mechanisms.
+*   **`publisher/http.rs`:**
+    *   Implements `HttpPublisher`, which forwards events to the event_ray_server via HTTP POST.
+*   **`publisher/redis.rs` (feature-gated with `redis-pubsub`):**
+    *   Implements `RedisPublisher`, which publishes events to a Redis Pub/Sub channel.
 
 ### 3. `event_ray_core` Crate (`event_ray_core/src/`)
 
