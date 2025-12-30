@@ -1,12 +1,12 @@
-use ingestion_service::{
-    app_state::AppState, config::IngestionConfig, publisher::EventPublisher, routes::create_router,
-};
-#[cfg(feature = "redis-pubsub")]
-use ingestion_service::publisher::redis::RedisPublisher;
 #[cfg(not(feature = "redis-pubsub"))]
 use ingestion_service::publisher::http::HttpPublisher;
 #[cfg(feature = "redis-pubsub")]
 use ingestion_service::publisher::redis::RedisPublisher;
+#[cfg(feature = "redis-pubsub")]
+use ingestion_service::publisher::redis::RedisPublisher;
+use ingestion_service::{
+    app_state::AppState, config::IngestionConfig, publisher::EventPublisher, routes::create_router,
+};
 use ingestion_service::{app_state::AppState, publisher::EventPublisher, routes::create_router};
 
 use std::sync::Arc;
@@ -26,24 +26,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     #[cfg(not(feature = "redis-pubsub"))]
-    let publisher: Arc<dyn EventPublisher> = Arc::new(HttpPublisher::new(
-        config.event_ray_target_url.clone(),
-    ));
+    let publisher: Arc<dyn EventPublisher> =
+        Arc::new(HttpPublisher::new(config.event_ray_target_url.clone()));
 
     let app_state = AppState { publisher };
 
     // Log which publisher mode is active
     #[cfg(feature = "redis-pubsub")]
-    println!("Using Redis publisher (channel: {})", config.redis.redis_channel);
+    println!(
+        "Using Redis publisher (channel: {})",
+        config.redis.redis_channel
+    );
 
     #[cfg(not(feature = "redis-pubsub"))]
-    println!("Using HTTP publisher (target: {})", config.event_ray_target_url);
+    println!(
+        "Using HTTP publisher (target: {})",
+        config.event_ray_target_url
+    );
 
     // Create router
     let app = create_router(app_state);
 
     // Setup listener
-    let addr = format!("{}:{}", config.ingestion_service_host, config.ingestion_service_port);
+    let addr = format!(
+        "{}:{}",
+        config.ingestion_service_host, config.ingestion_service_port
+    );
     let listener = TcpListener::bind(&addr).await?;
     println!(
         "Ingestion service running on http://{}",

@@ -16,8 +16,8 @@ pub struct IngestionConfig {
 
 impl IngestionConfig {
     pub fn from_env() -> Self {
-        let config: Self = envy::from_env()
-            .expect("Failed to load IngestionConfig from environment");
+        let config: Self =
+            envy::from_env().expect("Failed to load IngestionConfig from environment");
         config.validate();
         config
     }

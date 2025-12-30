@@ -17,6 +17,9 @@ pub struct RedisConfig {
 impl RedisConfig {
     pub fn validate(&self) {
         assert!(!self.redis_url.is_empty(), "REDIS_URL cannot be empty");
-        assert!(!self.redis_channel.is_empty(), "REDIS_CHANNEL cannot be empty");
+        assert!(
+            !self.redis_channel.is_empty(),
+            "REDIS_CHANNEL cannot be empty"
+        );
     }
 }

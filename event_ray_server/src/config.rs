@@ -15,8 +15,7 @@ pub struct ServerConfig {
 
 impl ServerConfig {
     pub fn from_env() -> Self {
-        let config: Self = envy::from_env()
-            .expect("Failed to load ServerConfig from environment");
+        let config: Self = envy::from_env().expect("Failed to load ServerConfig from environment");
         config.validate();
         config
     }

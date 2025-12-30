@@ -1,8 +1,8 @@
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use event_ray_server::{app_state::AppState, config::ServerConfig, routes};
 use event_ray_core::app_event::AppEvent;
+use event_ray_server::{app_state::AppState, config::ServerConfig, routes};
 use event_ray_server::{app_state::AppState, routes};
 
 #[cfg(feature = "redis-pubsub")]
@@ -34,17 +34,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let redis_channel = config.redis.redis_channel.clone();
         let sender_clone = event_sender.clone();
         tokio::spawn(async move {
-            if let Err(e) = redis_subscriber::run_redis_subscriber(
-                &redis_url,
-                &redis_channel,
-                sender_clone,
-            )
-            .await
+            if let Err(e) =
+                redis_subscriber::run_redis_subscriber(&redis_url, &redis_channel, sender_clone)
+                    .await
             {
                 eprintln!("Redis subscriber error: {:?}", e);
             }
         });
-        println!("Redis subscriber started (channel: {})", config.redis.redis_channel);
+        println!(
+            "Redis subscriber started (channel: {})",
+            config.redis.redis_channel
+        );
     }
 
     #[cfg(not(feature = "redis-pubsub"))]
@@ -57,7 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = routes::create_router(app_state);
 
     // Setup listener
-    let addr = format!("{}:{}", config.event_ray_server_host, config.event_ray_server_port);
+    let addr = format!(
+        "{}:{}",
+        config.event_ray_server_host, config.event_ray_server_port
+    );
     let listener = TcpListener::bind(&addr).await?;
     println!("Server running on http://{}", listener.local_addr()?);
 
