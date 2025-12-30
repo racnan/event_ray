@@ -2,12 +2,9 @@
 use ingestion_service::publisher::http::HttpPublisher;
 #[cfg(feature = "redis-pubsub")]
 use ingestion_service::publisher::redis::RedisPublisher;
-#[cfg(feature = "redis-pubsub")]
-use ingestion_service::publisher::redis::RedisPublisher;
 use ingestion_service::{
     app_state::AppState, config::IngestionConfig, publisher::EventPublisher, routes::create_router,
 };
-use ingestion_service::{app_state::AppState, publisher::EventPublisher, routes::create_router};
 
 use std::sync::Arc;
 use tokio::net::TcpListener;
