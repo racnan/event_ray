@@ -18,7 +18,11 @@ jobs:
         with:
           tool: cargo-hack,just
 
-      - run: cargo fmt --check
-      - run: just check
-      - run: just lint
-      - run: just test
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Check compilation
+        run: just check
+      - name: Run lints
+        run: just lint
+      - name: Run tests
+        run: just test
