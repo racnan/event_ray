@@ -3,7 +3,7 @@ use crate::error::Error;
 use async_trait::async_trait;
 use error_stack::{Report, ResultExt};
 use event_ray_core::app_event::AppEvent;
-use redis::{aio::MultiplexedConnection, AsyncCommands, Client};
+use redis::{AsyncCommands, Client, aio::MultiplexedConnection};
 
 pub struct RedisPublisher {
     client: Client,
@@ -37,7 +37,10 @@ impl EventPublisher for RedisPublisher {
         conn.publish::<_, _, ()>(&self.channel, json_payload)
             .await
             .change_context(Error::PublishFailed)
-            .attach(format!("Failed to publish to Redis channel: {}", self.channel))?;
+            .attach(format!(
+                "Failed to publish to Redis channel: {}",
+                self.channel
+            ))?;
 
         Ok(())
     }

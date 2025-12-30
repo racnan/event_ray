@@ -38,9 +38,7 @@ pub async fn run_redis_subscriber(
             .await
             .ok_or_else(|| Report::new(Error::RedisStreamEnded))?;
 
-        let payload: String = msg
-            .get_payload()
-            .map_err(|e| Report::new(Error::from(e)))?;
+        let payload: String = msg.get_payload().map_err(|e| Report::new(Error::from(e)))?;
 
         // Deserialize the message
         match serde_json::from_str::<AppEvent>(&payload) {

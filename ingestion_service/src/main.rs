@@ -1,8 +1,8 @@
-use ingestion_service::{app_state::AppState, publisher::EventPublisher, routes::create_router};
-#[cfg(feature = "redis-pubsub")]
-use ingestion_service::publisher::redis::RedisPublisher;
 #[cfg(not(feature = "redis-pubsub"))]
 use ingestion_service::publisher::http::HttpPublisher;
+#[cfg(feature = "redis-pubsub")]
+use ingestion_service::publisher::redis::RedisPublisher;
+use ingestion_service::{app_state::AppState, publisher::EventPublisher, routes::create_router};
 
 use std::sync::Arc;
 use tokio::net::TcpListener;

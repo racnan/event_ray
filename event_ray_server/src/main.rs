@@ -1,8 +1,8 @@
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use event_ray_server::{app_state::AppState, routes};
 use event_ray_core::app_event::AppEvent;
+use event_ray_server::{app_state::AppState, routes};
 
 #[cfg(feature = "redis-pubsub")]
 use event_ray_server::redis_subscriber;

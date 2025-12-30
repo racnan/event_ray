@@ -4,6 +4,36 @@
 
 ---
 
+## Task: Setup GitHub Actions CI
+
+**Summary:** Created a GitHub Actions CI workflow that automatically runs code quality checks on every push to `main` and pull requests targeting `main`. The workflow uses modern, idiomatic Rust CI practices (2025) with efficient caching and precompiled tool binaries.
+
+**Key Changes and Outcomes:**
+
+*   **CI Workflow Created (`.github/workflows/ci.yml`):**
+    *   Triggers on push to `main` branch and pull requests targeting `main`
+    *   Uses `ubuntu-latest` runner
+    *   `actions/checkout@v4` for repository checkout
+    *   `actions-rust-lang/setup-rust-toolchain@v1` for Rust stable installation with automatic caching, problem matchers, and `RUSTFLAGS=-D warnings`
+    *   `taiki-e/install-action@v2` for installing `cargo-hack` and `just` as precompiled binaries with caching
+    *   Runs `cargo fmt --check`, `just check`, `just lint`, and `just test`
+
+*   **Justfile Updated:**
+    *   Added `fmt` recipe that runs `cargo fmt --all` for convenient local code formatting
+
+*   **Codebase Formatting:**
+    *   Applied `cargo fmt` to fix pre-existing formatting inconsistencies across the workspace
+
+*   **Code Quality Ensured:**
+    *   `cargo fmt --check` passes
+    *   `just check` passes (all feature combinations compile)
+    *   `just lint` passes (no clippy warnings across all feature combinations)
+    *   `just test` passes (all integration tests pass)
+
+**Impact:** The project now has automated CI that ensures code quality on every contribution. The workflow catches compilation errors, clippy warnings, formatting issues, and test failures before code is merged. Using modern GitHub Actions (2025 best practices) ensures fast CI runs through efficient caching of Rust toolchain, cargo registry, and precompiled tools.
+
+---
+
 ## Task: Implement Scalable Event Propagation with Redis Pub/Sub
 
 **Summary:** Implemented an optional Redis Pub/Sub communication mode for Event Ray to enable horizontal scaling of both `ingestion_service` and `event_ray_server`. The entire implementation is controlled by a `redis-pubsub` feature flag, allowing the system to operate in either HTTP mode (default) or Redis Pub/Sub mode at compile time.
