@@ -47,8 +47,7 @@ pub async fn publish_event_handler(
     match state.event_sender.send(event) {
         Ok(_) => Ok(StatusCode::OK),
         Err(e) => {
-            let report = Report::new(Error::from(e))
-                .change_context(ApiError::InternalServerError);
+            let report = Report::new(Error::from(e)).change_context(ApiError::InternalServerError);
             Err(report.into())
         }
     }

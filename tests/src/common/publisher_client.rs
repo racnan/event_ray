@@ -20,11 +20,7 @@ impl PublisherTestClient {
     }
 
     /// Publish an event to a specific ray
-    pub async fn publish_event(
-        &self,
-        ray_id: &str,
-        payload: String,
-    ) -> Result<(), TestUtilError> {
+    pub async fn publish_event(&self, ray_id: &str, payload: String) -> Result<(), TestUtilError> {
         let request_body = PublishRequest {
             ray_id: ray_id.to_string(),
             payload,

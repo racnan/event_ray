@@ -38,6 +38,19 @@ All three main crates support the `redis-pubsub` feature flag:
 ## Development Tools:
 
 *   **`justfile`:** Located in the project root, provides convenient commands for running services in different modes, testing, and linting across all feature combinations.
+    *   `just fmt` - Format code with `cargo fmt --all`
+    *   `just check` - Check compilation for all feature combinations
+    *   `just lint` - Run clippy for all feature combinations
+    *   `just test` - Run workspace tests
+    *   `just run-http` - Run both services in HTTP mode
+    *   `just run-redis` - Run both services with Redis Pub/Sub
+
+## Continuous Integration:
+
+*   **`.github/workflows/ci.yml`:** GitHub Actions CI workflow that runs on push to `main` and pull requests targeting `main`.
+    *   Uses `actions-rust-lang/setup-rust-toolchain@v1` for Rust stable with automatic caching
+    *   Uses `taiki-e/install-action@v2` to install `cargo-hack` and `just`
+    *   Runs: `cargo fmt --check`, `just check`, `just lint`, `just test`
 
 ## Crate-Specific Module Overview:
 

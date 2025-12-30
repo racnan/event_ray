@@ -1,7 +1,7 @@
 use crate::{app_state::AppState, handlers::health_check, handlers::ingest_event_handler};
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 
 /// Creates the main Axum router for the ingestion service.

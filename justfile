@@ -38,3 +38,7 @@ lint:
 # Check compilation for all feature combinations
 check:
     cargo hack --feature-powerset check --workspace
+
+# Format code
+fmt:
+    cargo fmt --all
