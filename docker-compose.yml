@@ -1,0 +1,25 @@
+services:
+  event_ray_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.event_ray_server
+    env_file: .env.docker
+    ports:
+      - "8081:8081"
+    networks:
+      - event_ray_network
+
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion_service
+    env_file: .env.docker
+    ports:
+      - "8082:8082"
+    depends_on:
+      - event_ray_server
+    networks:
+      - event_ray_network
+
+networks:
+  event_ray_network:

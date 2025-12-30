@@ -1,0 +1,21 @@
+services:
+  event_ray_server:
+    build:
+      args:
+        FEATURES: redis-pubsub
+    depends_on:
+      - redis
+
+  ingestion_service:
+    build:
+      args:
+        FEATURES: redis-pubsub
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - event_ray_network

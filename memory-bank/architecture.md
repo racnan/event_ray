@@ -11,7 +11,9 @@
 ## High-Level Event Flow:
 
 1.  **Initialization:**
-    *   The application starts and initializes its core components, including the central event bus and the shared state that provides access to this bus.
+    *   The application loads configuration from environment variables (with `.env` file support via `dotenvy`).
+    *   Configuration is validated on startup using a fail-fast approach (no default values, empty string checks).
+    *   The application initializes its core components, including the central event bus and the shared state that provides access to this bus.
     *   HTTP endpoints for publishing events and subscribing to SSE streams are set up.
 
 2.  **Event Publishing:**

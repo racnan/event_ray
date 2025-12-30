@@ -1,252 +1,321 @@
-# Current Task: Implement Scalable Event Propagation with Redis Pub/Sub
+# Current Task: Introduce Configuration System
 
 ## Objective
 
-Implement a scalable event propagation mechanism using Redis Pub/Sub to decouple the `ingestion_service` from the `event_ray_server`. This will allow multiple instances of each service to communicate effectively. The entire implementation will be controlled by a `redis-pubsub` feature flag.
+Introduce a configuration system to replace all hardcoded values in the codebase using environment variables with `.env` file support.
+
+**Approach:**
+- Use `dotenvy` to load `.env` files into environment variables
+- Use `envy` with `serde` to deserialize environment variables into typed config structs
+- Fail fast: no default values in code, validate on startup (empty string checks, etc.)
+- Shell environment variables override `.env` file values
+
+**Config structure:**
+- `event_ray_core`:
+  - `init()` function to load `.env`
+  - `RedisConfig` struct (shared by both services when `redis-pubsub` enabled)
+- `event_ray_server`: `ServerConfig` struct
+- `ingestion_service`: `IngestionConfig` struct
+
+**Configurable values:**
+- Server host/port for both services
+- Broadcast channel capacity
+- Redis URL and channel name
+- Event Ray target URL (for HTTP mode inter-service communication)
 
 ## Implementation Steps
 
-### Step 1: Add Dependencies
+### Step 1: Add dependencies
 
-**Objective:** Add the `redis` crate as an optional dependency to the relevant services, controlled by a `redis-pubsub` feature flag. This will be done using the `cargo add` command to ensure the latest versions are used. Note: `serde_json` is already a regular dependency in both services, so it does not need to be added.
+Add `dotenvy` and `envy` crates using `cargo add`:
 
-**Execution Plan:**
+```bash
+cargo add dotenvy envy -p event_ray_core
+cargo add envy -p event_ray_server
+cargo add envy -p ingestion_service
+```
 
-1.  **Update `ingestion_service/Cargo.toml`**:
-    *   Run the following command to add `redis` as an optional dependency with the `tokio-comp` feature:
-        ```sh
-        cargo add redis --optional --features tokio-comp -p ingestion_service
-        ```
-    *   Manually add the `[features]` section to define the `redis-pubsub` feature, which will enable the `redis` dependency:
-        ```toml
-        [features]
-        redis-pubsub = ["dep:redis"]
-        ```
+Note: All crates already have `serde` with derive feature.
 
-2.  **Update `event_ray_server/Cargo.toml`**:
-    *   Run the following command to add `redis` as an optional dependency with the `tokio-comp` feature:
-        ```sh
-        cargo add redis --optional --features tokio-comp -p event_ray_server
-        ```
-    *   Manually add the `[features]` section to define the `redis-pubsub` feature, which will enable the `redis` dependency:
-        ```toml
-        [features]
-        redis-pubsub = ["dep:redis"]
-        ```
+### Step 2: Create config module in `event_ray_core`
 
-### Step 2: Create `RedisPublisher`
+1. Add `redis-pubsub` feature to `event_ray_core/Cargo.toml` (needed for feature-gated `RedisConfig`)
 
-**Objective:** Create a new publisher in `ingestion_service` that implements the `EventPublisher` trait and sends events to a Redis channel.
+2. Update feature definitions in both `event_ray_server/Cargo.toml` and `ingestion_service/Cargo.toml` to propagate the feature to `event_ray_core`:
 
-**Execution Plan:**
+```toml
+[features]
+redis-pubsub = ["dep:redis", "event_ray_core/redis-pubsub"]
+```
 
-1.  **Create New File:** Create `ingestion_service/src/publisher/redis.rs`.
-2.  **Conditional Compilation:** Guard the entire module with `#[cfg(feature = "redis-pubsub")]` to ensure it is only compiled when the feature is enabled.
-3.  **Define `RedisPublisher` Struct:** The struct will hold a `redis::Client` for connecting to Redis and a `String` for the channel name.
-4.  **Implement `new` Function:** The constructor will take a Redis URL, initialize the `redis::Client`, and return a `RedisPublisher` instance.
-5.  **Implement `EventPublisher` Trait:** Implement the `async fn publish(&self, event: &AppEvent)` method. This method will:
-    a.  Get a connection from the Redis client.
-    b.  Serialize the `AppEvent` to a JSON string using `serde_json`.
-    c.  Use the Redis `PUBLISH` command to send the JSON string to the configured channel.
-    d.  Handle and report any errors using `error-stack`.
-6.  **Expose Module:** Add `#[cfg(feature = "redis-pubsub")] pub mod redis;` to `ingestion_service/src/publisher.rs` to make the new module available.
+3. Create `event_ray_core/src/config.rs`:
 
-### Step 3: Create Redis Subscriber
+```rust
+/// Load .env file into environment variables.
+/// Call once at startup before loading any config.
+/// Uses .ok() because .env file is optional - production may use real env vars.
+pub fn init() {
+    dotenvy::dotenv().ok();
+}
 
-**Objective:** Create a background task in `event_ray_server` that subscribes to a Redis channel and forwards received events to the internal Tokio broadcast channel.
+/// Redis configuration - shared by both services when redis-pubsub enabled
+#[cfg(feature = "redis-pubsub")]
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RedisConfig {
+    pub redis_url: String,
+    pub redis_channel: String,
+}
 
-**Execution Plan:**
-
-1.  **Update Error Types:** Add Redis-related error variants to `event_ray_server/src/error.rs`, guarded by `#[cfg(feature = "redis-pubsub")]`:
-    *   `RedisConnection` - for connection/subscription failures (wraps `redis::RedisError`)
-    *   `Deserialization` - for JSON parsing failures (wraps `serde_json::Error`)
-
-2.  **Create New File:** Create `event_ray_server/src/redis_subscriber.rs`.
-
-3.  **Conditional Compilation:** Guard the entire module with `#[cfg(feature = "redis-pubsub")]`.
-
-4.  **Implement Subscriber Function:** Create an async function `run_redis_subscriber` with the following signature:
-    ```rust
-    pub async fn run_redis_subscriber(
-        redis_url: &str,
-        channel: &str,
-        event_sender: broadcast::Sender<AppEvent>,
-    ) -> Result<(), Report<Error>>
-    ```
-    The function will:
-    a.  Connect to Redis using `redis::Client`.
-    b.  Get a Pub/Sub connection and subscribe to the specified channel.
-    c.  Loop to receive messages from the Redis subscription.
-    d.  Deserialize each message from JSON into `AppEvent`.
-    e.  Send the `AppEvent` to the broadcast channel.
-
-5.  **Error Handling Strategy:**
-    *   **Connection errors:** Return `Err` and exit the function (fatal).
-    *   **Deserialization errors:** Log the error with `eprintln!` and continue listening (non-fatal).
-    *   **Broadcast send errors:** Log the error and continue (non-fatal, indicates no subscribers).
-
-6.  **Expose Module:** Add `#[cfg(feature = "redis-pubsub")] pub mod redis_subscriber;` to `event_ray_server/src/lib.rs`.
-
-### Step 4: Update `ingestion_service` Initialization
-
-**Objective:** Conditionally initialize `RedisPublisher` or `HttpPublisher` in `ingestion_service/src/main.rs` based on the `redis-pubsub` feature flag.
-
-**Execution Plan:**
-
-1.  **Add Conditional Imports:** Update imports in `main.rs` to be feature-gated:
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    use ingestion_service::publisher::redis::RedisPublisher;
-
-    #[cfg(not(feature = "redis-pubsub"))]
-    use ingestion_service::publisher::http::HttpPublisher;
-    ```
-
-2.  **Conditional Publisher Creation:** Replace the current publisher initialization with feature-gated code:
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    let publisher: Arc<dyn EventPublisher> = Arc::new(RedisPublisher::new(
-        "redis://127.0.0.1:6379".to_string(),
-        "event_ray:events".to_string(),
-    ));
-
-    #[cfg(not(feature = "redis-pubsub"))]
-    let publisher: Arc<dyn EventPublisher> = Arc::new(HttpPublisher::new(
-        "http://localhost:8081/api/events".to_string(),
-    ));
-    ```
-
-3.  **Add Startup Log:** Print which publisher mode is active for visibility:
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    println!("Using Redis publisher (channel: event_ray:events)");
-
-    #[cfg(not(feature = "redis-pubsub"))]
-    println!("Using HTTP publisher");
-    ```
-
-4.  **Add Required Import:** Add `use crate::publisher::EventPublisher;` to bring the trait into scope for the `Arc<dyn EventPublisher>` type annotation.
-
-### Step 5: Update `event_ray_server` Initialization
-
-**Objective:** Conditionally spawn the Redis subscriber task in `event_ray_server/src/main.rs` when the `redis-pubsub` feature is enabled. The server should verify Redis connectivity before starting.
-
-**Execution Plan:**
-
-1.  **Add Conditional Import:**
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    use event_ray_server::redis_subscriber;
-    ```
-
-2.  **Verify Redis Connection Before Starting:** Before spawning the subscriber, test the Redis connection. If it fails, the server should exit with an error rather than starting in a broken state:
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    {
-        // Verify Redis connectivity before starting
-        let client = redis::Client::open("redis://127.0.0.1:6379")?;
-        let mut conn = client.get_multiplexed_async_connection().await?;
-        redis::cmd("PING").query_async::<String>(&mut conn).await?;
-        println!("Connected to Redis successfully");
+#[cfg(feature = "redis-pubsub")]
+impl RedisConfig {
+    pub fn validate(&self) {
+        assert!(!self.redis_url.is_empty(), "REDIS_URL cannot be empty");
+        assert!(!self.redis_channel.is_empty(), "REDIS_CHANNEL cannot be empty");
     }
-    ```
+}
+```
 
-3.  **Spawn Redis Subscriber:** After verifying connectivity, spawn the subscriber task:
-    ```rust
-    #[cfg(feature = "redis-pubsub")]
-    {
-        let sender_clone = event_sender.clone();
-        tokio::spawn(async move {
-            if let Err(e) = redis_subscriber::run_redis_subscriber(
-                "redis://127.0.0.1:6379",
-                "event_ray:events",
-                sender_clone,
-            ).await {
-                eprintln!("Redis subscriber error: {:?}", e);
-            }
-        });
-        println!("Redis subscriber started (channel: event_ray:events)");
-    }
-    ```
+4. Export the module in `event_ray_core/src/lib.rs`:
 
-4.  **Add Startup Log for Non-Redis Mode:**
-    ```rust
+```rust
+pub mod config;
+```
+
+### Step 3: Create config module in `ingestion_service`
+
+1. Create `ingestion_service/src/config.rs`:
+
+```rust
+use serde::Deserialize;
+
+#[cfg(feature = "redis-pubsub")]
+use event_ray_core::config::RedisConfig;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IngestionConfig {
+    pub ingestion_service_host: String,
+    pub ingestion_service_port: u16,
     #[cfg(not(feature = "redis-pubsub"))]
-    println!("Running in HTTP mode (no Redis subscriber)");
-    ```
-
-5.  **Add Conditional Redis Import:** Add feature-gated import for the `redis` crate:
-    ```rust
+    pub event_ray_target_url: String,
     #[cfg(feature = "redis-pubsub")]
-    use redis::AsyncCommands;
-    ```
+    #[serde(flatten)]
+    pub redis: RedisConfig,
+}
 
-### Step 6: Add Justfile
+impl IngestionConfig {
+    pub fn from_env() -> Self {
+        let config: Self = envy::from_env()
+            .expect("Failed to load IngestionConfig from environment");
+        config.validate();
+        config
+    }
 
-**Objective:** Add a `justfile` to the project root for convenient development commands, including running both services together and checking all feature combinations.
+    fn validate(&self) {
+        assert!(
+            !self.ingestion_service_host.is_empty(),
+            "INGESTION_SERVICE_HOST cannot be empty"
+        );
+        #[cfg(not(feature = "redis-pubsub"))]
+        assert!(
+            !self.event_ray_target_url.is_empty(),
+            "EVENT_RAY_TARGET_URL cannot be empty"
+        );
+        #[cfg(feature = "redis-pubsub")]
+        self.redis.validate();
+    }
+}
+```
 
-**Execution Plan:**
+2. Export the module in `ingestion_service/src/lib.rs`:
 
-1.  **Create `justfile`** in the project root with the following content:
+```rust
+pub mod config;
+```
 
-    ```just
-    # Default recipe - show available commands
-    default:
-        @just --list
+3. Update `ingestion_service/src/main.rs`:
+   - Call `event_ray_core::config::init()` at startup
+   - Load `IngestionConfig::from_env()`
+   - Replace hardcoded host/port with config values
+   - Use `config.redis` for Redis publisher setup (when `redis-pubsub` enabled)
 
-    # Run both services in HTTP mode (default)
-    run-http:
-        #!/usr/bin/env bash
-        set -e
-        echo "Starting services in HTTP mode..."
-        cargo run -p event_ray_server &
-        SERVER_PID=$!
-        cargo run -p ingestion_service &
-        INGESTION_PID=$!
-        trap "kill $SERVER_PID $INGESTION_PID 2>/dev/null" EXIT
-        wait
+### Step 4: Create config module in `event_ray_server`
 
-    # Run both services with Redis Pub/Sub
-    run-redis:
-        #!/usr/bin/env bash
-        set -e
-        echo "Starting services with Redis Pub/Sub..."
-        echo "Make sure Redis is running on localhost:6379"
-        cargo run -p event_ray_server --features redis-pubsub &
-        SERVER_PID=$!
-        cargo run -p ingestion_service --features redis-pubsub &
-        INGESTION_PID=$!
-        trap "kill $SERVER_PID $INGESTION_PID 2>/dev/null" EXIT
-        wait
+1. Create `event_ray_server/src/config.rs`:
 
-    # Run tests
-    test:
-        cargo test --workspace
+```rust
+use serde::Deserialize;
 
-    # Run clippy for all feature combinations
-    lint:
-        cargo hack --feature-powerset clippy --workspace -- -D warnings
+#[cfg(feature = "redis-pubsub")]
+use event_ray_core::config::RedisConfig;
 
-    # Check compilation for all feature combinations
-    check:
-        cargo hack --feature-powerset check --workspace
-    ```
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerConfig {
+    pub event_ray_server_host: String,
+    pub event_ray_server_port: u16,
+    pub broadcast_channel_capacity: usize,
+    #[cfg(feature = "redis-pubsub")]
+    #[serde(flatten)]
+    pub redis: RedisConfig,
+}
 
-2.  **Prerequisites:** Developers will need to install `just` and `cargo-hack`:
-    ```sh
-    cargo install just
-    cargo install cargo-hack
-    ```
+impl ServerConfig {
+    pub fn from_env() -> Self {
+        let config: Self = envy::from_env()
+            .expect("Failed to load ServerConfig from environment");
+        config.validate();
+        config
+    }
 
-### Step 7: Update Documentation
+    fn validate(&self) {
+        assert!(
+            !self.event_ray_server_host.is_empty(),
+            "EVENT_RAY_SERVER_HOST cannot be empty"
+        );
+        assert!(
+            self.broadcast_channel_capacity > 0,
+            "BROADCAST_CHANNEL_CAPACITY must be greater than 0"
+        );
+        #[cfg(feature = "redis-pubsub")]
+        self.redis.validate();
+    }
+}
+```
 
-**Objective:** Update project documentation to reflect the new Redis Pub/Sub feature.
+2. Export the module in `event_ray_server/src/lib.rs`:
 
-**Execution Plan:**
+```rust
+pub mod config;
+```
 
-1.  **Review and update the following documents as needed:**
-    *   `README.md` - Document the Redis feature, justfile commands, and prerequisites
-    *   `memory-bank/architecture.md` - Update event flow to reflect the Redis Pub/Sub path
-    *   `memory-bank/project_structure.md` - Document new files and feature flags
+3. Update `event_ray_server/src/main.rs`:
+   - Call `event_ray_core::config::init()` at startup
+   - Load `ServerConfig::from_env()`
+   - Replace hardcoded host/port with config values
+   - Use `config.broadcast_channel_capacity` for broadcast channel setup
+   - Use `config.redis` for Redis subscriber setup (when `redis-pubsub` enabled)
 
-2.  **Add entry to `memory-bank/previoustasks.md`** summarizing the completed task (per SOP).
+### Step 5: Create `.env` files
+
+1. Create `.env` for local development (uses `localhost` for safety):
+
+```bash
+# Event Ray Server
+EVENT_RAY_SERVER_HOST=localhost
+EVENT_RAY_SERVER_PORT=8081
+BROADCAST_CHANNEL_CAPACITY=100
+
+# Ingestion Service
+INGESTION_SERVICE_HOST=localhost
+INGESTION_SERVICE_PORT=8082
+
+# HTTP mode: target URL for ingestion -> server communication
+EVENT_RAY_TARGET_URL=http://localhost:8081/api/events
+
+# Redis (used when redis-pubsub feature is enabled)
+REDIS_URL=redis://127.0.0.1:6379
+REDIS_CHANNEL=event_ray:events
+```
+
+2. Create `.env.docker` for Docker (uses `0.0.0.0` to accept external connections):
+
+```bash
+# Event Ray Server
+EVENT_RAY_SERVER_HOST=0.0.0.0
+EVENT_RAY_SERVER_PORT=8081
+BROADCAST_CHANNEL_CAPACITY=100
+
+# Ingestion Service
+INGESTION_SERVICE_HOST=0.0.0.0
+INGESTION_SERVICE_PORT=8082
+
+# HTTP mode: target URL uses Docker service name for inter-container communication
+EVENT_RAY_TARGET_URL=http://event_ray_server:8081/api/events
+
+# Redis (used when redis-pubsub feature is enabled)
+REDIS_URL=redis://redis:6379
+REDIS_CHANNEL=event_ray:events
+```
+
+3. Both files committed to git (no secrets, safe defaults).
+
+### Step 6: Update Docker Compose setup
+
+1. Update Dockerfiles to support feature flags via build args.
+
+   In `Dockerfile.event_ray_server`, change build command to:
+   ```dockerfile
+   ARG FEATURES=""
+   RUN if [ -z "$FEATURES" ]; then \
+         cargo build --release -p event_ray_server; \
+       else \
+         cargo build --release -p event_ray_server --features "$FEATURES"; \
+       fi
+   ```
+
+   Same change in `Dockerfile.ingestion_service` for `ingestion_service`.
+
+2. Create `docker-compose.yml` (base - HTTP mode):
+
+```yaml
+services:
+  event_ray_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.event_ray_server
+    env_file: .env.docker
+    ports:
+      - "8081:8081"
+    networks:
+      - event_ray_network
+
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion_service
+    env_file: .env.docker
+    ports:
+      - "8082:8082"
+    depends_on:
+      - event_ray_server
+    networks:
+      - event_ray_network
+
+networks:
+  event_ray_network:
+```
+
+3. Create `docker-compose.redis.yml` (override - adds Redis mode):
+
+```yaml
+services:
+  event_ray_server:
+    build:
+      args:
+        FEATURES: redis-pubsub
+    depends_on:
+      - redis
+
+  ingestion_service:
+    build:
+      args:
+        FEATURES: redis-pubsub
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - event_ray_network
+```
+
+4. Usage:
+
+```bash
+# HTTP mode
+docker-compose up --build
+
+# Redis mode (merges base + override)
+docker-compose -f docker-compose.yml -f docker-compose.redis.yml up --build
+```

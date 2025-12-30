@@ -1,7 +1,7 @@
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use event_ray_server::{app_state::AppState, routes};
+use event_ray_server::{app_state::AppState, config::ServerConfig, routes};
 use event_ray_core::app_event::AppEvent;
 
 #[cfg(feature = "redis-pubsub")]
@@ -12,24 +12,30 @@ use event_ray_server::redis_subscriber;
 /// application state, router, and starts the HTTP server.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env file and config
+    event_ray_core::config::init();
+    let config = ServerConfig::from_env();
+
     // Initialize broadcast channel
-    let (event_sender, _) = broadcast::channel::<AppEvent>(100);
+    let (event_sender, _) = broadcast::channel::<AppEvent>(config.broadcast_channel_capacity);
 
     // Verify Redis connection and spawn subscriber (if feature enabled)
     #[cfg(feature = "redis-pubsub")]
     {
         // Verify Redis connectivity before starting
-        let client = redis::Client::open("redis://127.0.0.1:6379")?;
+        let client = redis::Client::open(config.redis.redis_url.as_str())?;
         let mut conn = client.get_multiplexed_async_connection().await?;
         redis::cmd("PING").query_async::<String>(&mut conn).await?;
         println!("Connected to Redis successfully");
 
         // Spawn Redis subscriber task
+        let redis_url = config.redis.redis_url.clone();
+        let redis_channel = config.redis.redis_channel.clone();
         let sender_clone = event_sender.clone();
         tokio::spawn(async move {
             if let Err(e) = redis_subscriber::run_redis_subscriber(
-                "redis://127.0.0.1:6379",
-                "event_ray:events",
+                &redis_url,
+                &redis_channel,
                 sender_clone,
             )
             .await
@@ -37,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Redis subscriber error: {:?}", e);
             }
         });
-        println!("Redis subscriber started (channel: event_ray:events)");
+        println!("Redis subscriber started (channel: {})", config.redis.redis_channel);
     }
 
     #[cfg(not(feature = "redis-pubsub"))]
@@ -50,8 +56,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = routes::create_router(app_state);
 
     // Setup listener
-    let listener = TcpListener::bind("0.0.0.0:8081").await?;
-    println!("Server running on http://0.0.0.0:8081"); // Log the actual listening address
+    let addr = format!("{}:{}", config.event_ray_server_host, config.event_ray_server_port);
+    let listener = TcpListener::bind(&addr).await?;
+    println!("Server running on http://{}", listener.local_addr()?);
 
     // Start server
     axum::serve(listener, app).await?;
