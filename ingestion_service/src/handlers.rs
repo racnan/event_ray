@@ -42,7 +42,10 @@ pub async fn ingest_event_handler(
         .await
         .change_context(ApiError::InternalServerError)?;
 
-    println!("Ingestion service successfully published event: {:?}", event);
+    println!(
+        "Ingestion service successfully published event: {:?}",
+        event
+    );
 
     // Return 202 Accepted
     Ok(StatusCode::ACCEPTED)

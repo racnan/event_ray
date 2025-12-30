@@ -1,8 +1,6 @@
 use crate::common::error::TestUtilError;
 use event_ray_server::app_state::AppState as EventRayAppState;
-use ingestion_service::{
-    app_state::AppState as IngestionAppState, publisher::http::HttpPublisher,
-};
+use ingestion_service::{app_state::AppState as IngestionAppState, publisher::http::HttpPublisher};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -38,8 +36,7 @@ impl TestServerHandle {
         let router = match config {
             ServerConfig::EventRay => {
                 println!("Starting Event Ray server at {base_url}");
-                let (event_sender, _) =
-                    tokio::sync::broadcast::channel(1024);
+                let (event_sender, _) = tokio::sync::broadcast::channel(1024);
                 let app_state = EventRayAppState { event_sender };
                 event_ray_server::routes::create_router(app_state)
             }
@@ -47,8 +44,7 @@ impl TestServerHandle {
                 event_ray_server_url,
             } => {
                 println!("Starting Ingestion server at {base_url}");
-                let publisher =
-                    HttpPublisher::new(format!("{}/api/events", event_ray_server_url));
+                let publisher = HttpPublisher::new(format!("{}/api/events", event_ray_server_url));
                 let app_state = IngestionAppState {
                     publisher: Arc::new(publisher),
                 };

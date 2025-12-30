@@ -2,6 +2,6 @@
 pub mod app_state;
 pub mod error;
 pub mod handlers;
-pub mod routes;
 #[cfg(feature = "redis-pubsub")]
 pub mod redis_subscriber;
+pub mod routes;
