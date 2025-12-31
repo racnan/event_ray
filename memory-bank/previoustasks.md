@@ -4,6 +4,53 @@
 
 ---
 
+## Task: Introduce Configuration System with Environment Variables
+
+**Summary:** Introduced a configuration system to replace all hardcoded values in the codebase using environment variables with `.env` file support. The system uses `dotenvy` for loading `.env` files and `envy` with `serde` for deserializing environment variables into typed config structs. A fail-fast approach ensures validation on startup with no default values in code.
+
+**Key Changes and Outcomes:**
+
+*   **Dependencies Added:**
+    *   Added `dotenvy` and `envy` to `event_ray_core`
+    *   Added `envy` to `event_ray_server` and `ingestion_service`
+
+*   **`event_ray_core` Config Module:**
+    *   Created `event_ray_core/src/config.rs` with `init()` function to load `.env` files
+    *   Added feature-gated `RedisConfig` struct shared by both services when `redis-pubsub` is enabled
+    *   Added `redis-pubsub` feature flag to `event_ray_core/Cargo.toml`
+    *   Updated feature propagation in `event_ray_server` and `ingestion_service` to include `event_ray_core/redis-pubsub`
+
+*   **`event_ray_server` Config Module:**
+    *   Created `event_ray_server/src/config.rs` with `ServerConfig` struct
+    *   Configurable values: `EVENT_RAY_SERVER_HOST`, `EVENT_RAY_SERVER_PORT`, `BROADCAST_CHANNEL_CAPACITY`
+    *   Feature-gated Redis config via `serde(flatten)`
+    *   Updated `main.rs` to load config on startup and use config values
+
+*   **`ingestion_service` Config Module:**
+    *   Created `ingestion_service/src/config.rs` with `IngestionConfig` struct
+    *   Configurable values: `INGESTION_SERVICE_HOST`, `INGESTION_SERVICE_PORT`, `EVENT_RAY_TARGET_URL`
+    *   Feature-gated Redis config via `serde(flatten)`
+    *   Updated `main.rs` to load config on startup and use config values
+
+*   **Environment Files:**
+    *   Created `.env` for local development (uses `localhost` for safety)
+    *   Created `.env.docker` for Docker deployment (uses `0.0.0.0` and service names)
+
+*   **Docker Compose Setup:**
+    *   Updated `Dockerfile.event_ray_server` and `Dockerfile.ingestion_service` to support `FEATURES` build arg
+    *   Created `docker-compose.yml` for base HTTP mode deployment
+    *   Created `docker-compose.redis.yml` as override for Redis Pub/Sub mode
+    *   Usage: `docker-compose up` for HTTP, `docker-compose -f docker-compose.yml -f docker-compose.redis.yml up` for Redis
+
+*   **Code Quality Ensured:**
+    *   All feature combinations compile (`just check`)
+    *   No clippy warnings in any configuration (`just lint`)
+    *   All automated tests pass (`just test`)
+
+**Impact:** Event Ray now supports flexible deployment configuration through environment variables. Different environments (local dev, Docker, production) can use different configurations without code changes. The fail-fast validation ensures misconfiguration is caught immediately on startup.
+
+---
+
 ## Task: Setup GitHub Actions CI
 
 **Summary:** Created a GitHub Actions CI workflow that automatically runs code quality checks on every push to `main` and pull requests targeting `main`. The workflow uses modern, idiomatic Rust CI practices (2025) with efficient caching and precompiled tool binaries.

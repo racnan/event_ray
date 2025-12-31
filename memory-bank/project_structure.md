@@ -26,12 +26,14 @@ The Event Ray project is structured as a Cargo workspace, consisting of several 
 
 ## Feature Flags:
 
-Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` feature flag:
+All three main crates support the `redis-pubsub` feature flag:
 
 *   **`redis-pubsub`:** Enables Redis Pub/Sub communication mode for scalable event propagation. When enabled:
+    *   `event_ray_core` exposes the shared `RedisConfig` struct
     *   `ingestion_service` uses `RedisPublisher` to publish events to a Redis channel
     *   `event_ray_server` spawns a background subscriber task to receive events from Redis
     *   When disabled (default), services communicate via direct HTTP requests
+    *   Feature propagation: `event_ray_server` and `ingestion_service` propagate this feature to `event_ray_core`
 
 ## Development Tools:
 
@@ -56,10 +58,15 @@ Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` featu
 
 *   **`main.rs`:**
     *   The application's main entry point for the SSE server.
+    *   Loads configuration from environment variables via `ServerConfig`.
     *   Initializes runtime, shared state (like `AppState`), configures routes, and starts the HTTP server.
     *   When the `redis-pubsub` feature is enabled, verifies Redis connectivity and spawns the Redis subscriber task.
 *   **`lib.rs`:**
     *   Declares public modules of the `event_ray_server` library, making them accessible for `main.rs` and integration tests.
+*   **`config.rs`:**
+    *   Defines `ServerConfig` struct for server configuration (host, port, broadcast channel capacity).
+    *   Includes feature-gated `RedisConfig` via `serde(flatten)` when `redis-pubsub` is enabled.
+    *   Provides `from_env()` for loading and validating configuration on startup.
 *   **`app_state.rs`:**
     *   Defines the `AppState` struct, encapsulating shared application state (like the event broadcast sender using `AppEvent` from `event_ray_core`) for the SSE server.
 *   **`error.rs`:**
@@ -76,8 +83,13 @@ Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` featu
 
 *   **`main.rs`:**
     *   The main entry point for the Ingestion Service.
+    *   Loads configuration from environment variables via `IngestionConfig`.
     *   Initializes runtime, configures routes, and starts its HTTP server.
     *   Conditionally initializes either `HttpPublisher` (default) or `RedisPublisher` (with `redis-pubsub` feature) based on feature flags.
+*   **`config.rs`:**
+    *   Defines `IngestionConfig` struct for service configuration (host, port, target URL for HTTP mode).
+    *   Includes feature-gated `RedisConfig` via `serde(flatten)` when `redis-pubsub` is enabled.
+    *   Provides `from_env()` for loading and validating configuration on startup.
 *   **`app_state.rs`:**
     *   Manages shared application state, including a trait object for the event publisher.
 *   **`error.rs`:**
@@ -97,6 +109,9 @@ Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` featu
 
 *   **`lib.rs`:**
     *   The main library file, declaring and exporting shared modules.
+*   **`config.rs`:**
+    *   Provides `init()` function to load `.env` files into environment variables using `dotenvy`.
+    *   Defines feature-gated `RedisConfig` struct (when `redis-pubsub` is enabled) shared by both services.
 *   **`error.rs`:**
     *   Defines the workspace-wide `ApiError` enum, which provides high-level error contexts (`BadRequest`, `InternalServerError`) for creating consistent HTTP responses.
     *   Contains the `ApiErrorResponse` newtype wrapper for converting `error-stack::Report<ApiError>` into an `axum::response::IntoResponse`.
@@ -128,5 +143,14 @@ Both `event_ray_server` and `ingestion_service` support the `redis-pubsub` featu
 
 *   **`ApiError`, `ApiErrorResponse` (in `event_ray_core/src/error.rs`):**
     *   **Purpose:** `ApiError` provides high-level classification of errors for HTTP responses. `ApiErrorResponse` wraps an `error-stack::Report` to provide a consistent, centralized `IntoResponse` implementation for all services.
+
+*   **`RedisConfig` (in `event_ray_core/src/config.rs`, feature-gated):**
+    *   **Purpose:** Shared Redis configuration (URL, channel name) used by both services when `redis-pubsub` is enabled.
+
+*   **`ServerConfig` (in `event_ray_server/src/config.rs`):**
+    *   **Purpose:** Configuration for `event_ray_server` including host, port, and broadcast channel capacity.
+
+*   **`IngestionConfig` (in `ingestion_service/src/config.rs`):**
+    *   **Purpose:** Configuration for `ingestion_service` including host, port, and target URL (HTTP mode) or Redis config (Redis mode).
 
 This workspace structure with distinct crates aims for better separation of concerns, improved build times for individual components, and clearer organization as the project grows.

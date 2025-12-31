@@ -2,39 +2,54 @@
 use ingestion_service::publisher::http::HttpPublisher;
 #[cfg(feature = "redis-pubsub")]
 use ingestion_service::publisher::redis::RedisPublisher;
-use ingestion_service::{app_state::AppState, publisher::EventPublisher, routes::create_router};
+use ingestion_service::{
+    app_state::AppState, config::IngestionConfig, publisher::EventPublisher, routes::create_router,
+};
 
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env file and config
+    event_ray_core::config::init();
+    let config = IngestionConfig::from_env();
+
     // Initialize publisher
     #[cfg(feature = "redis-pubsub")]
     let publisher: Arc<dyn EventPublisher> = Arc::new(RedisPublisher::new(
-        "redis://127.0.0.1:6379".to_string(),
-        "event_ray:events".to_string(),
+        config.redis.redis_url.clone(),
+        config.redis.redis_channel.clone(),
     ));
 
     #[cfg(not(feature = "redis-pubsub"))]
-    let publisher: Arc<dyn EventPublisher> = Arc::new(HttpPublisher::new(
-        "http://localhost:8081/api/events".to_string(),
-    ));
+    let publisher: Arc<dyn EventPublisher> =
+        Arc::new(HttpPublisher::new(config.event_ray_target_url.clone()));
 
     let app_state = AppState { publisher };
 
     // Log which publisher mode is active
     #[cfg(feature = "redis-pubsub")]
-    println!("Using Redis publisher (channel: event_ray:events)");
+    println!(
+        "Using Redis publisher (channel: {})",
+        config.redis.redis_channel
+    );
 
     #[cfg(not(feature = "redis-pubsub"))]
-    println!("Using HTTP publisher");
+    println!(
+        "Using HTTP publisher (target: {})",
+        config.event_ray_target_url
+    );
 
     // Create router
     let app = create_router(app_state);
 
     // Setup listener
-    let listener = TcpListener::bind("0.0.0.0:8082").await?;
+    let addr = format!(
+        "{}:{}",
+        config.ingestion_service_host, config.ingestion_service_port
+    );
+    let listener = TcpListener::bind(&addr).await?;
     println!(
         "Ingestion service running on http://{}",
         listener.local_addr()?

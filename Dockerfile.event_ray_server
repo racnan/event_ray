@@ -8,9 +8,16 @@ WORKDIR /usr/src/event_ray
 # Copy the entire project directory into the container's working directory.
 COPY . .
 
+# Build argument for optional features (e.g., "redis-pubsub")
+ARG FEATURES=""
+
 # Compile the application in release mode.
 # This creates an optimized executable binary.
-RUN cargo build --release -p event_ray_server
+RUN if [ -z "$FEATURES" ]; then \
+      cargo build --release -p event_ray_server; \
+    else \
+      cargo build --release -p event_ray_server --features "$FEATURES"; \
+    fi
 
 # Inform Docker that the container listens on port 8081 at runtime.
 EXPOSE 8081

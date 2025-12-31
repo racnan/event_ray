@@ -10,99 +10,92 @@ For more detailed information on the project's design and architecture, please r
 *   [**Architecture**](memory-bank/architecture.md): A high-level overview of the event flow and system design.
 *   [**Project Structure**](memory-bank/project_structure.md): A detailed breakdown of the workspace, crates, and modules.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-To build and run the project, you will need to have the following installed:
-
-*   [Rust](https://www.rust-lang.org/tools/install)
-*   [Cargo](https://doc.rust-lang.org/cargo/) (comes with Rust)
-*   [Just](https://github.com/casey/just) (optional, for convenient development commands)
-*   [cargo-hack](https://github.com/taiki-e/cargo-hack) (optional, for testing all feature combinations)
-*   [Redis](https://redis.io/docs/getting-started/installation/) (required only for Redis Pub/Sub mode)
+*   [Rust](https://www.rust-lang.org/tools/install) (with Cargo)
+*   [Just](https://github.com/casey/just) (for development commands)
+*   [cargo-hack](https://github.com/taiki-e/cargo-hack) (for testing all feature combinations)
+*   [Docker](https://docs.docker.com/get-docker/) (for containerized deployment)
+*   [Redis](https://redis.io/docs/getting-started/installation/) (only for Redis Pub/Sub mode)
 
 ## How to Run
 
-1.  **Build the workspace:**
+### Local Development
+
+**HTTP Mode (default):**
+```bash
+just run-http
+```
+
+**Redis Pub/Sub Mode:**
+```bash
+# Ensure Redis is running on localhost:6379
+just run-redis
+```
+
+### Docker Compose
+
+**HTTP Mode:**
+```bash
+docker-compose up --build
+```
+
+**Redis Pub/Sub Mode:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.redis.yml up --build
+```
+
+## Usage
+
+Once the services are running:
+
+**Subscribe to an SSE stream:**
+
+*   **Subscribe to "ray_1":**
 
     ```bash
-    cargo build --workspace
+    curl -N http://localhost:8081/sse?ray=ray_1
     ```
 
-2.  **Run the `event_ray_server`:**
+*   **Subscribe to "ray_2":**
 
-    This server handles SSE subscriptions and is responsible for streaming events to clients.
+    Open another terminal and run:
 
     ```bash
-    cargo run --bin event_ray_server
+    curl -N http://localhost:8081/sse?ray=ray_2
     ```
 
-    The server will start on port `8081`.
+**Publish an event:**
 
-3.  **Run the `ingestion_service`:**
-
-    This service provides an endpoint for ingesting events into the system. Open a new terminal window and run:
+*   **Publish to "ray_1":**
 
     ```bash
-    cargo run --bin ingestion_service
+    curl -X POST http://localhost:8082/api/events -H "Content-Type: application/json" -d '{
+      "ray_id": "ray_1",
+      "payload": "Hello from ray 1!"
+    }'
     ```
 
-    The ingestion service will start on port `8082`.
+    You should see the event appear in the terminal subscribed to "ray_1".
 
-4.  **Subscribe to an SSE stream:**
+*   **Publish to "ray_2":**
 
-    You can use `curl` to subscribe to an event stream for a specific "ray".
+    ```bash
+    curl -X POST http://localhost:8082/api/events -H "Content-Type: application/json" -d '{
+      "ray_id": "ray_2",
+      "payload": "Greetings from ray 2!"
+    }'
+    ```
 
-    *   **Subscribe to "ray_1":**
-
-        ```bash
-        curl -N http://localhost:8081/sse?ray=ray_1
-        ```
-
-    *   **Subscribe to "ray_2":**
-
-        Open another terminal and run:
-
-        ```bash
-        curl -N http://localhost:8081/sse?ray=ray_2
-        ```
-
-5.  **Publish an event:**
-
-    You can now publish events to the subscribed rays using the `ingestion_service`.
-
-    *   **Publish to "ray_1":**
-
-        ```bash
-        curl -X POST http://localhost:8082/api/events -H "Content-Type: application/json" -d '''{
-          "ray_id": "ray_1",
-          "payload": "Hello from ray 1!"
-        }'''
-        ```
-
-        You should see the event appear in the terminal subscribed to "ray_1".
-
-    *   **Publish to "ray_2":**
-
-        ```bash
-        curl -X POST http://localhost:8082/api/events -H "Content-Type: application/json" -d '''{
-          "ray_id": "ray_2",
-          "payload": "Greetings from ray 2!"
-        }'''
-        ```
-
-        You should see this event appear in the terminal subscribed to "ray_2".
+    You should see this event appear in the terminal subscribed to "ray_2".
 
 ## Testing
 
-To run the integration test suite, use the following command:
-
 ```bash
-cargo test --workspace
+just test    # Run all tests
+just check   # Check compilation for all feature combinations
+just lint    # Run clippy for all feature combinations
 ```
-
-**Note:** The test suite manages its own server instances. Please ensure that any manually started servers are shut down before running the tests to avoid port conflicts.
 
 ## Work in Progress
 

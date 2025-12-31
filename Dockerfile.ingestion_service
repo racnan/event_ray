@@ -8,8 +8,15 @@ WORKDIR /usr/src/event_ray
 # This includes all workspace members.
 COPY . .
 
+# Build argument for optional features (e.g., "redis-pubsub")
+ARG FEATURES=""
+
 # Compile the ingestion_service application in release mode.
-RUN cargo build --release -p ingestion_service
+RUN if [ -z "$FEATURES" ]; then \
+      cargo build --release -p ingestion_service; \
+    else \
+      cargo build --release -p ingestion_service --features "$FEATURES"; \
+    fi
 
 # Inform Docker that the container listens on port 8082 at runtime.
 # This should match the port the ingestion_service is configured to use.
