@@ -6,3 +6,6 @@ members = [
     "ingestion_service",
     "tests",
 ]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
