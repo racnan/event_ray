@@ -100,3 +100,12 @@ just lint    # Run clippy for all feature combinations
 ## Work in Progress
 
 This project is under active development. The APIs and architecture are subject to change.
+
+## License
+
+Licensed under either of:
+
+- [MIT license](LICENSE-MIT)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+
+at your option.
